@@ -1,0 +1,17 @@
+flutter_launcher_icons:
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/icons/app_icon_raw.png"
+  image_path_ios: "assets/icons/app_icon_raw.png"
+  adaptive_icon_background: "#FF6B9D"
+  adaptive_icon_foreground: "assets/icons/app_icon_raw.png"
+  min_sdk_android: 21
+  web:
+    generate: true
+    image_path: "assets/icons/app_icon_raw.png"
+  windows:
+    generate: true
+    image_path: "assets/icons/app_icon_raw.png"
+  macos:
+    generate: true
+    image_path: "assets/icons/app_icon_raw.png"
