@@ -51,8 +51,6 @@ dependencies:
   shake_plus: ^1.0.0
 
   # 视觉追踪（设备端）
-  vision_ai: ^0.2.0
-
   # 网络与云端同步（后续使用）
   firebase_core: ^4.12.1
   firebase_database: ^12.4.6
@@ -66,6 +64,8 @@ dependencies:
   # UI 辅助
   flutter_svg: ^2.0.9
   firebase_auth: ^6.5.6
+  google_ml_kit: ^0.22.0
+  camera: ^0.12.0+2
 
 dev_dependencies:
   flutter_test:
