@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/pet_bloc.dart';
 import '../../models/pet_state.dart';
-import '../../services/firebase_service.dart';
 import 'home_page.dart';
 import 'study_page.dart';
 import 'partner_page.dart';
@@ -15,9 +14,8 @@ class MainPage extends StatefulWidget {
   State<MainPage> createState() => _MainPageState();
 }
 
-class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
+class _MainPageState extends State<MainPage> {
   int _currentIndex = 0;
-  final FirebaseService _firebase = FirebaseService();
 
   final List<Widget> _pages = const [
     HomePage(),
@@ -25,41 +23,6 @@ class _MainPageState extends State<MainPage> with WidgetsBindingObserver {
     PartnerPage(),
     SettingsPage(),
   ];
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _updateOnlineStatus(true);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _updateOnlineStatus(false);
-    _firebase.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    switch (state) {
-      case AppLifecycleState.resumed:
-        _updateOnlineStatus(true);
-        break;
-      case AppLifecycleState.paused:
-      case AppLifecycleState.detached:
-        _updateOnlineStatus(false);
-        break;
-      case AppLifecycleState.inactive:
-      case AppLifecycleState.hidden:
-        break;
-    }
-  }
-
-  void _updateOnlineStatus(bool isOnline) {
-    _firebase.updateOnlineStatus(isOnline);
-  }
 
   @override
   Widget build(BuildContext context) {

@@ -8,11 +8,7 @@ import '../models/pet_event.dart';
 /// 宠物 Bloc - 管理所有宠物状态逻辑
 class PetBloc extends Bloc<PetEvent, PetState> {
   Timer? _decayTimer;
-  Timer? _sleepTimer;
-  Timer? _wakeTimer;
   static const _decayInterval = Duration(seconds: 30);
-  static const _sleepDelay = Duration(minutes: 10);
-  static const _wakeInterval = Duration(minutes: 30);
   static const _storageKey = 'pet_state';
 
   PetBloc() : super(PetState.initial()) {
@@ -30,16 +26,12 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     on<PetUpdateIntimacyEvent>(_onUpdateIntimacy);
     on<PetResetEvent>(_onReset);
     on<PetPartnerMessageEvent>(_onPartnerMessage);
-    on<_PetSleepEvent>(_onSleep);
-    on<_PetWakeEvent>(_onWake);
 
     add(PetInitEvent());
 
-    // 延迟启动定时器，避免 Bloc 构造期间崩溃
     Future.microtask(() {
       if (!isClosed) {
         _startDecayTimer();
-        _startSleepDetection();
       }
     });
   }
@@ -295,69 +287,9 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     }
   }
 
-  /// 启动睡眠检测
-  void _startSleepDetection() {
-    _sleepTimer?.cancel();
-    _sleepTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
-      if (isClosed || state.activity == PetActivity.sleeping) return;
-
-      final idleDuration = DateTime.now().difference(state.lastInteraction);
-      if (idleDuration > _sleepDelay && state.isAwake) {
-        add(_PetSleepEvent());
-      }
-    });
-  }
-
-  /// 进入休眠
-  void _onSleep(_PetSleepEvent event, Emitter<PetState> emit) {
-    if (!state.isAwake) return;
-
-    emit(state.copyWith(
-      isAwake: false,
-      activity: PetActivity.sleeping,
-      thought: '💤 休息一下...',
-    ));
-    _saveState(state);
-    _startWakeTimer();
-  }
-
-  /// 启动唤醒定时器
-  void _startWakeTimer() {
-    _wakeTimer?.cancel();
-    _wakeTimer = Timer(_wakeInterval, () {
-      if (!isClosed && !state.isAwake) {
-        add(_PetWakeEvent());
-      }
-    });
-  }
-
-  /// 唤醒宠物
-  void _onWake(_PetWakeEvent event, Emitter<PetState> emit) {
-    if (state.isAwake) return;
-
-    emit(state.copyWith(
-      isAwake: true,
-      activity: PetActivity.watching,
-      thought: '👀 醒来看你啦~',
-      lastInteraction: DateTime.now(),
-    ));
-    _saveState(state);
-
-    Future.delayed(const Duration(seconds: 5), () {
-      if (!isClosed) {
-        add(PetSetActivityEvent(PetActivity.idle));
-      }
-    });
-  }
-
   @override
   Future<void> close() {
     _decayTimer?.cancel();
-    _sleepTimer?.cancel();
-    _wakeTimer?.cancel();
     return super.close();
   }
 }
-
-class _PetSleepEvent extends PetEvent {}
-class _PetWakeEvent extends PetEvent {}
