@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'bloc/pet_bloc.dart';
 import 'models/pet_state.dart';
+import 'presentation/pet/pet_painter.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,15 +19,12 @@ class HcyPetApp extends StatelessWidget {
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
       ),
-      home: BlocProvider(
-        create: (_) => PetBloc(),
-        child: const TestPage(),
-      ),
+      home: const TestPage(),
     );
   }
 }
 
-/// 测试 A：只用 PetBloc，不渲染 CustomPainter
+/// 测试 B：只用 CustomPaint + PetPainter，不加载 PetBloc
 class TestPage extends StatelessWidget {
   const TestPage({super.key});
 
@@ -37,29 +33,12 @@ class TestPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: BlocBuilder<PetBloc, PetState>(
-          builder: (context, state) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  state.thought ?? 'HcyPet',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    color: Color(0xFF4FC3F7),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '心情: ${state.mood.name}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.white54,
-                  ),
-                ),
-              ],
-            );
-          },
+        child: CustomPaint(
+          size: const Size(300, 300),
+          painter: PetPainter(
+            state: PetState.initial(),
+            size: 300,
+          ),
         ),
       ),
     );
