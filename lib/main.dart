@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'bloc/pet_bloc.dart';
 import 'models/pet_state.dart';
 import 'presentation/pet/pet_painter.dart';
 
@@ -19,12 +21,15 @@ class HcyPetApp extends StatelessWidget {
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
       ),
-      home: const TestPage(),
+      home: BlocProvider(
+        create: (_) => PetBloc(),
+        child: const TestPage(),
+      ),
     );
   }
 }
 
-/// 测试 B：只用 CustomPaint + PetPainter，不加载 PetBloc
+/// 测试 C：PetBloc + CustomPaint 结合（无动画、无传感器）
 class TestPage extends StatelessWidget {
   const TestPage({super.key});
 
@@ -33,12 +38,16 @@ class TestPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: CustomPaint(
-          size: const Size(300, 300),
-          painter: PetPainter(
-            state: PetState.initial(),
-            size: 300,
-          ),
+        child: BlocBuilder<PetBloc, PetState>(
+          builder: (context, state) {
+            return CustomPaint(
+              size: const Size(300, 300),
+              painter: PetPainter(
+                state: state,
+                size: 300,
+              ),
+            );
+          },
         ),
       ),
     );
