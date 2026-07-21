@@ -14,7 +14,9 @@ import Vision
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    FaceDetectorPlugin.register(with: engineBridge.pluginRegistry.registrar(forPlugin: "FaceDetectorPlugin"))
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "FaceDetectorPlugin") {
+      FaceDetectorPlugin.register(with: registrar)
+    }
   }
 }
 
