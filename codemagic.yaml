@@ -19,13 +19,17 @@ workflows:
           # 构建 archive
           flutter build ipa --release --no-codesign
           
-          # 手动打包 IPA
+          # 创建输出目录
+          mkdir -p build/ios/ipa
+          
+          # 复制并打包
           mkdir -p Payload
           cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app Payload/
           zip -r build/ios/ipa/HcyPet.ipa Payload/
           rm -rf Payload
           
           echo "✅ IPA 已生成: build/ios/ipa/HcyPet.ipa"
+          ls -la build/ios/ipa/
     artifacts:
       - build/ios/ipa/HcyPet.ipa
     publishing:
