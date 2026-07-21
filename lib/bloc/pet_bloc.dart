@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/pet_state.dart';
 import '../models/pet_event.dart';
 
@@ -27,18 +28,25 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     on<PetPartnerMessageEvent>(_onPartnerMessage);
 
     add(PetInitEvent());
-
-    Future.microtask(() {
-      if (!isClosed) {
-        _startDecayTimer();
-      }
-    });
+    _startDecayTimer();
   }
 
   // ============ 事件处理器 ============
 
-  /// 初始化
+  /// 初始化：从 SharedPreferences 加载状态
   Future<void> _onInit(PetInitEvent event, Emitter<PetState> emit) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString(_storageKey);
+      if (jsonStr != null) {
+        final Map<String, dynamic> data = jsonDecode(jsonStr);
+        final loadedState = PetState.fromJson(data);
+        emit(loadedState);
+        return;
+      }
+    } catch (e) {
+      // 加载失败，使用默认状态
+    }
     emit(PetState.initial());
   }
 
@@ -264,9 +272,14 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     });
   }
 
-  /// 保存状态
+  /// 保存状态到 SharedPreferences
   Future<void> _saveState(PetState state) async {
-    // TODO: 恢复 SharedPreferences 保存
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_storageKey, jsonEncode(state.toJson()));
+    } catch (e) {
+      // 保存失败静默处理
+    }
   }
 
   @override
