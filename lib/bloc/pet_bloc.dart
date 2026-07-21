@@ -35,8 +35,13 @@ class PetBloc extends Bloc<PetEvent, PetState> {
 
     add(PetInitEvent());
 
-    _startDecayTimer();
-    _startSleepDetection();
+    // 延迟启动定时器，避免 Bloc 构造期间崩溃
+    Future.microtask(() {
+      if (!isClosed) {
+        _startDecayTimer();
+        _startSleepDetection();
+      }
+    });
   }
 
   // ============ 事件处理器 ============

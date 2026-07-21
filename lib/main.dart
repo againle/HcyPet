@@ -4,6 +4,11 @@ import 'bloc/pet_bloc.dart';
 import 'presentation/pages/main_page.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('FATAL: ${details.exception}');
+  };
   runApp(const HcyPetApp());
 }
 
