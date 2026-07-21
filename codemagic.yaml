@@ -16,39 +16,16 @@ workflows:
           cd ..
       - name: 构建并导出 IPA
         script: |
-          # 1. Flutter 构建（生成 Runner.app）
-          flutter build ios --release --no-codesign
+          # 1. Switch to SPM (avoids CocoaPods issues)
+          export SWIFT_PACKAGE_MANAGER_INTEGRATION=1
           
-          # 2. 创建 ExportOptions.plist
-          cat > ios/ExportOptions.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>development</string>
-              <key>teamID</key>
-              <string>0000000000</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>stripSwiftSymbols</key>
-              <true/>
-              <key>compileBitcode</key>
-              <false/>
-          </dict>
-          </plist>
-          EOF
+          # 2. Flutter 构建 archive
+          flutter build ipa --release --no-codesign --export-method development
           
-          # 3. 使用 xcodebuild 从 .app 生成 .ipa
-          mkdir -p build/ios/ipa
-          mkdir -p Payload
-          cp -R build/ios/iphoneos/Runner.app Payload/
-          zip -qry build/ios/ipa/HcyPet.ipa Payload/
-          rm -rf Payload
-          
-          echo "✅ IPA: $(ls -lh build/ios/ipa/HcyPet.ipa)"
+          # 3. 验证产物
+          echo "✅ IPA: $(ls -lh build/ios/ipa/*.ipa)"
     artifacts:
-      - build/ios/ipa/HcyPet.ipa
+      - build/ios/ipa/*.ipa
     publishing:
       email:
         recipients:
