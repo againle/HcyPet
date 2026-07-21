@@ -64,8 +64,8 @@ dependencies:
   # UI 辅助
   flutter_svg: ^2.0.9
   firebase_auth: ^6.5.6
-  google_ml_kit: ^0.22.0
   camera: ^0.12.0+2
+  google_mlkit_face_detection: ^0.14.0
 
 dev_dependencies:
   flutter_test:
