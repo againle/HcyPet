@@ -2,35 +2,41 @@ workflows:
   ios-build:
     name: iOS Build for SideStore
     environment:
-      vars:
-        APP_NAME: "HcyPet"
-        BUNDLE_ID: "com.hcypet.app"  
       flutter: stable
       xcode: latest
       cocoapods: default
     scripts:
-      - name: 设置 Flutter 依赖
+      - name: 获取依赖
         script: |
           flutter pub get
-          flutter pub run build_runner build --delete-conflicting-outputs
       - name: 安装 iOS 依赖
         script: |
           cd ios
           pod install --repo-update
           cd ..
-      - name: 构建 iOS IPA
+      - name: 构建未签名 IPA（SideStore 可自动签名）
         script: |
           flutter build ipa \
             --release \
             --build-name=1.0.0 \
             --build-number=1 \
-            --export-options-plist=ios/ExportOptions.plist
+            --no-codesign
+      - name: 确认构建成功
+        script: |
+          if [ -f "build/ios/ipa/*.ipa" ]; then
+            echo "✅ IPA 构建成功！"
+            echo "📁 位置: build/ios/ipa/"
+            ls -la build/ios/ipa/
+          else
+            echo "❌ IPA 构建失败"
+            exit 1
+          fi
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
       email:
         recipients:
-          - hkliu178@outlook.com  
+          - hkliu178@outlook.com
         notify:
           success: true
           failure: true
