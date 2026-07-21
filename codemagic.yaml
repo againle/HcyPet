@@ -14,25 +14,20 @@ workflows:
           cd ios
           pod install --repo-update
           cd ..
-      - name: 构建未签名 IPA（SideStore 可自动签名）
+      - name: 构建并打包 IPA
         script: |
-          flutter build ipa \
-            --release \
-            --build-name=1.0.0 \
-            --build-number=1 \
-            --no-codesign
-      - name: 确认构建成功
-        script: |
-          if [ -f "build/ios/ipa/*.ipa" ]; then
-            echo "✅ IPA 构建成功！"
-            echo "📁 位置: build/ios/ipa/"
-            ls -la build/ios/ipa/
-          else
-            echo "❌ IPA 构建失败"
-            exit 1
-          fi
+          # 构建 archive
+          flutter build ipa --release --no-codesign
+          
+          # 手动打包 IPA
+          mkdir -p Payload
+          cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app Payload/
+          zip -r build/ios/ipa/HcyPet.ipa Payload/
+          rm -rf Payload
+          
+          echo "✅ IPA 已生成: build/ios/ipa/HcyPet.ipa"
     artifacts:
-      - build/ios/ipa/*.ipa
+      - build/ios/ipa/HcyPet.ipa
     publishing:
       email:
         recipients:
