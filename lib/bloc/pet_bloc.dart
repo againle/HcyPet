@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,8 +6,6 @@ import '../models/pet_event.dart';
 
 /// 宠物 Bloc - 管理所有宠物状态逻辑
 class PetBloc extends Bloc<PetEvent, PetState> {
-  Timer? _decayTimer;
-  static const _decayInterval = Duration(seconds: 30);
   static const _storageKey = 'pet_state';
 
   PetBloc() : super(PetState.initial()) {
@@ -28,7 +25,6 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     on<PetPartnerMessageEvent>(_onPartnerMessage);
 
     add(PetInitEvent());
-    _startDecayTimer();
   }
 
   // ============ 事件处理器 ============
@@ -262,16 +258,6 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     return PetMood.happy;
   }
 
-  /// 启动衰减计时器
-  void _startDecayTimer() {
-    _decayTimer?.cancel();
-    _decayTimer = Timer.periodic(_decayInterval, (timer) {
-      if (!isClosed) {
-        add(PetTickEvent(_decayInterval));
-      }
-    });
-  }
-
   /// 保存状态到 SharedPreferences
   Future<void> _saveState(PetState state) async {
     try {
@@ -284,7 +270,6 @@ class PetBloc extends Bloc<PetEvent, PetState> {
 
   @override
   Future<void> close() {
-    _decayTimer?.cancel();
     return super.close();
   }
 }

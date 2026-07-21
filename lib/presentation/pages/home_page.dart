@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/pet_bloc.dart';
 import '../../models/pet_event.dart';
 import '../../models/pet_state.dart';
-import '../../services/sensor_service.dart';
 import '../pet/pet_widget.dart';
 import '../widgets/voice_recorder_button.dart';
 
@@ -16,44 +15,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final SensorService _sensorService = SensorService();
-
   @override
   void initState() {
     super.initState();
-    _initSensor();
-  }
-
-  @override
-  void dispose() {
-    _sensorService.stopListening();
-    super.dispose();
-  }
-
-  /// 初始化传感器
-  void _initSensor() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _sensorService.startListening(
-          onShake: _onShakeDetected,
-          onAccelerometerUpdate: _onAccelerometerUpdate,
-        );
-      }
-    });
-  }
-
-  /// 摇晃检测回调
-  void _onShakeDetected() {
-    if (!mounted) return;
-    final bloc = context.read<PetBloc>();
-    bloc.add(PetShakeEvent());
-
-    _showToast('📱 摇晃！');
-  }
-
-  /// 加速度更新回调
-  void _onAccelerometerUpdate(double x, double y, double z) {
-    // 可扩展：检测设备放置状态、步数等
   }
 
   void _showToast(String message) {
@@ -140,31 +104,6 @@ class _HomePageState extends State<HomePage> {
               _buildStatusIndicators(state),
 
               const SizedBox(height: 20),
-
-              // --- 传感器状态指示 ---
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: _sensorService.isListening
-                          ? const Color(0xFF4FC3F7).withOpacity(0.4)
-                          : Colors.red.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _sensorService.isListening ? '传感器已连接' : '传感器未连接',
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: const Color(0xFF4FC3F7).withOpacity(0.15),
-                    ),
-                  ),
-                ],
-              ),
 
               const SizedBox(height: 8),
             ],
@@ -269,8 +208,7 @@ class _HomePageState extends State<HomePage> {
             icon: '📱',
             label: '摇晃',
             onTap: () {
-              // 手动触发摇晃（用于调试）
-              _onShakeDetected();
+              context.read<PetBloc>().add(PetShakeEvent());
             },
           ),
         ],

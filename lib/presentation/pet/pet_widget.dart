@@ -23,24 +23,10 @@ class PetWidget extends StatefulWidget {
   State<PetWidget> createState() => _PetWidgetState();
 }
 
-class _PetWidgetState extends State<PetWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _breathController;
-
+class _PetWidgetState extends State<PetWidget> {
   @override
   void initState() {
     super.initState();
-    // 呼吸动画：让宠物微微起伏
-    _breathController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _breathController.dispose();
-    super.dispose();
   }
 
   @override
@@ -49,22 +35,12 @@ class _PetWidgetState extends State<PetWidget>
       onTap: widget.onTap,
       onDoubleTap: widget.onDoubleTap,
       onPanUpdate: widget.onPanUpdate,
-      child: AnimatedBuilder(
-        animation: _breathController,
-        builder: (context, child) {
-          // 呼吸效果：轻微缩放
-          final breathScale = 1.0 + _breathController.value * 0.015;
-          return Transform.scale(
-            scale: breathScale,
-            child: CustomPaint(
-              size: Size(widget.size, widget.size),
-              painter: PetPainter(
-                state: widget.state,
-                size: widget.size,
-              ),
-            ),
-          );
-        },
+      child: CustomPaint(
+        size: Size(widget.size, widget.size),
+        painter: PetPainter(
+          state: widget.state,
+          size: widget.size,
+        ),
       ),
     );
   }
