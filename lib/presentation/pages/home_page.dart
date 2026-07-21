@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/pet_bloc.dart';
 import '../../models/pet_event.dart';
 import '../../models/pet_state.dart';
+import '../../services/sensor_service.dart';
 import '../pet/pet_widget.dart';
 import '../widgets/voice_recorder_button.dart';
 
@@ -15,9 +16,33 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final SensorService _sensorService = SensorService();
+
   @override
   void initState() {
     super.initState();
+    _initSensor();
+  }
+
+  @override
+  void dispose() {
+    _sensorService.stopListening();
+    super.dispose();
+  }
+
+  void _initSensor() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _sensorService.startListening(
+          onShake: () {
+            if (mounted) {
+              context.read<PetBloc>().add(PetShakeEvent());
+            }
+          },
+          onAccelerometerUpdate: (x, y, z) {},
+        );
+      }
+    });
   }
 
   void _showToast(String message) {
@@ -104,6 +129,31 @@ class _HomePageState extends State<HomePage> {
               _buildStatusIndicators(state),
 
               const SizedBox(height: 20),
+
+              // --- 传感器状态指示 ---
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: _sensorService.isListening
+                          ? const Color(0xFF4FC3F7).withOpacity(0.4)
+                          : Colors.red.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _sensorService.isListening ? '传感器已连接' : '传感器未连接',
+                    style: TextStyle(
+                      fontSize: 8,
+                      color: const Color(0xFF4FC3F7).withOpacity(0.15),
+                    ),
+                  ),
+                ],
+              ),
 
               const SizedBox(height: 8),
             ],
