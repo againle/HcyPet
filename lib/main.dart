@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'bloc/pet_bloc.dart';
 import 'presentation/pages/main_page.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
-    debugPrint('FATAL: ${details.exception}');
   };
+
+  // Firebase 手动初始化（Info.plist 中禁用了自动配置）
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    // Firebase 初始化失败不阻塞启动
+  }
+
   runApp(const HcyPetApp());
 }
 
