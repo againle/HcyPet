@@ -16,13 +16,39 @@ workflows:
           cd ..
       - name: 构建并导出 IPA
         script: |
-          # 1. Switch to SPM (avoids CocoaPods issues)
-          export SWIFT_PACKAGE_MANAGER_INTEGRATION=1
+          # 1. Flutter 构建 archive
+          flutter build ipa --release --no-codesign
           
-          # 2. Flutter 构建 archive
-          flutter build ipa --release --no-codesign --export-method development
+          # 2. 创建 ExportOptions.plist（不签名）
+          cat > ios/ExportOptions.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>compileBitcode</key>
+              <false/>
+              <key>provisioningProfiles</key>
+              <dict/>
+          </dict>
+          </plist>
+          EOF
           
-          # 3. 验证产物
+          # 3. 从 xcarchive 导出 IPA（无签名）
+          xcodebuild -exportArchive \
+            -archivePath build/ios/archive/Runner.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            -allowProvisioningUpdates \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+          
           echo "✅ IPA: $(ls -lh build/ios/ipa/*.ipa)"
     artifacts:
       - build/ios/ipa/*.ipa
