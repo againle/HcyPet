@@ -14,22 +14,39 @@ workflows:
           cd ios
           pod install --repo-update
           cd ..
-      - name: 构建并打包 IPA
+      - name: 构建并导出 IPA
         script: |
-          # 构建 archive
-          flutter build ipa --release --no-codesign
+          # 1. Flutter 构建（生成 Runner.app）
+          flutter build ios --release --no-codesign
           
-          # 创建输出目录
+          # 2. 创建 ExportOptions.plist
+          cat > ios/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>development</string>
+              <key>teamID</key>
+              <string>0000000000</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>stripSwiftSymbols</key>
+              <true/>
+              <key>compileBitcode</key>
+              <false/>
+          </dict>
+          </plist>
+          EOF
+          
+          # 3. 使用 xcodebuild 从 .app 生成 .ipa
           mkdir -p build/ios/ipa
-          
-          # 复制并打包
           mkdir -p Payload
-          cp -R build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app Payload/
-          zip -r build/ios/ipa/HcyPet.ipa Payload/
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry build/ios/ipa/HcyPet.ipa Payload/
           rm -rf Payload
           
-          echo "✅ IPA 已生成: build/ios/ipa/HcyPet.ipa"
-          ls -la build/ios/ipa/
+          echo "✅ IPA: $(ls -lh build/ios/ipa/HcyPet.ipa)"
     artifacts:
       - build/ios/ipa/HcyPet.ipa
     publishing:
