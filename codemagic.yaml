@@ -16,42 +16,23 @@ workflows:
           cd ..
       - name: 构建并导出 IPA
         script: |
-          # 1. Flutter 构建 archive
-          flutter build ipa --release --no-codesign
+          # 1. 直接用 flutter build ios（不用 archive）
+          flutter build ios --release --no-codesign
           
-          # 2. 创建 ExportOptions.plist（不签名）
-          cat > ios/ExportOptions.plist << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>development</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>stripSwiftSymbols</key>
-              <true/>
-              <key>compileBitcode</key>
-              <false/>
-              <key>provisioningProfiles</key>
-              <dict/>
-          </dict>
-          </plist>
-          EOF
+          # 2. 确认产物存在
+          ls -la build/ios/iphoneos/Runner.app
           
-          # 3. 从 xcarchive 导出 IPA（无签名）
-          xcodebuild -exportArchive \
-            -archivePath build/ios/archive/Runner.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist ios/ExportOptions.plist \
-            -allowProvisioningUpdates \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+          # 3. 手动打包 IPA（标准 Payload 结构，清理隐藏文件）
+          mkdir -p build/ios/ipa
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          find Payload -name ".DS_Store" -delete
+          ditto -c -k --sequesterRsrc --keepParent Payload build/ios/ipa/HcyPet.ipa
+          rm -rf Payload
           
-          echo "✅ IPA: $(ls -lh build/ios/ipa/*.ipa)"
+          echo "✅ IPA: $(ls -lh build/ios/ipa/HcyPet.ipa)"
     artifacts:
-      - build/ios/ipa/*.ipa
+      - build/ios/ipa/HcyPet.ipa
     publishing:
       email:
         recipients:
