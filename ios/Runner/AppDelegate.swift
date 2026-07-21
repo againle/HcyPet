@@ -12,5 +12,7 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // 注册自定义人脸检测插件（基于 iOS Vision 框架）
+    FaceDetectorPlugin.register(with: engineBridge.pluginRegistry.registrar(forPlugin: "FaceDetectorPlugin"))
   }
 }

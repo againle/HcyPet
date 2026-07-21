@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
-import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:camera/camera.dart';
 
 /// 情绪检测结果
@@ -29,7 +29,6 @@ class EmotionResult {
 
   bool get isPositive =>
       emotion == 'happy' || emotion == 'surprised' || emotion == 'neutral';
-
   bool get isNegative =>
       emotion == 'sad' || emotion == 'angry' || emotion == 'fearful' || emotion == 'disgusted';
 
@@ -46,41 +45,31 @@ class EmotionResult {
   }
 }
 
-/// 视觉追踪服务（基于 Google ML Kit 设备端 API）
+/// 视觉追踪服务（iOS 原生 Vision 框架，零外部依赖）
 class VisionService {
   static final VisionService _instance = VisionService._internal();
   factory VisionService() => _instance;
   VisionService._internal();
 
-  FaceDetector? _faceDetector;
+  static const _channel = MethodChannel('com.hcypet/face_detector');
+
   CameraController? _cameraController;
   bool _isInitialized = false;
   bool _isProcessing = false;
+  DateTime _lastFrameTime = DateTime.now();
 
   void Function(EmotionResult result)? onEmotionDetected;
   void Function(String error)? onError;
-
   EmotionResult _lastResult = EmotionResult.empty();
 
-  /// 初始化摄像头 + 人脸检测
   Future<bool> initialize() async {
     if (_isInitialized) return true;
-
     try {
-      _faceDetector = FaceDetector(
-        options: FaceDetectorOptions(
-          enableClassification: true,
-          enableTracking: true,
-          performanceMode: FaceDetectorMode.fast,
-        ),
-      );
-
       final cameras = await availableCameras();
       if (cameras.isEmpty) {
         _onError('没有可用的摄像头');
         return false;
       }
-
       _cameraController = CameraController(
         cameras.firstWhere(
           (c) => c.lensDirection == CameraLensDirection.front,
@@ -89,97 +78,81 @@ class VisionService {
         ResolutionPreset.low,
         enableAudio: false,
       );
-
       await _cameraController!.initialize();
-      _cameraController!.startImageStream(_processFrame);
-
       _isInitialized = true;
-      debugPrint('📷 视觉追踪服务已启动 (ML Kit)');
+      debugPrint('📷 视觉追踪已启动 (Apple Vision)');
+
+      // 使用图像流而不是 takePicture（避免磁盘 I/O）
+      _cameraController!.startImageStream(_onFrame);
       return true;
     } catch (e) {
-      _onError('视觉追踪初始化失败: $e');
+      _onError('视觉初始化失败: $e');
       return false;
     }
   }
 
-  /// 处理每帧图像
-  void _processFrame(CameraImage cameraImage) async {
-    if (!_isInitialized || _isProcessing) return;
+  /// 摄像头帧回调（直接处理 CameraImage，无磁盘 I/O）
+  void _onFrame(CameraImage cameraImage) {
+    // 节流：最多 500ms 处理一帧
+    final now = DateTime.now();
+    if (now.difference(_lastFrameTime).inMilliseconds < 500) return;
+    _lastFrameTime = now;
+
+    if (_isProcessing) return;
     _isProcessing = true;
 
+    _detectFace(cameraImage).then((_) {
+      _isProcessing = false;
+    });
+  }
+
+  Future<void> _detectFace(CameraImage image) async {
     try {
-      final inputImage = _buildInputImage(cameraImage);
-      if (inputImage == null) {
-        _isProcessing = false;
-        return;
+      // 从第一平面提取 bytes（通常为 YUV420 的 Y 平面或 BGRA）
+      final plane = image.planes.first;
+      final bytes = plane.bytes;
+
+      final result = await _channel.invokeMethod<Map>('detectFace', {
+        'imageData': Uint8List.view(bytes.buffer, bytes.offsetInBytes, bytes.lengthInBytes),
+        'width': image.width,
+        'height': image.height,
+      });
+
+      if (result != null) {
+        _onNativeResult(result);
       }
-
-      final faces = await _faceDetector!.processImage(inputImage);
-      _processFaces(faces);
     } catch (e) {
-      // 静默处理帧错误
+      // 静默处理单帧错误
     }
-    _isProcessing = false;
   }
 
-  /// 构建 ML Kit InputImage
-  InputImage? _buildInputImage(CameraImage image) {
-    final camera = _cameraController?.description;
-    if (camera == null) return null;
-
-    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation);
-    if (rotation == null) return null;
-
-    final format = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (format == null) return null;
-
-    final plane = image.planes.first;
-    return InputImage.fromBytes(
-      bytes: plane.bytes,
-      metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
-        format: format,
-        bytesPerRow: plane.bytesPerRow,
-      ),
-    );
-  }
-
-  /// 处理人脸检测结果
-  void _processFaces(List<Face> faces) {
-    if (faces.isEmpty) {
+  void _onNativeResult(Map result) {
+    final hasFace = result['hasFace'] == true;
+    if (!hasFace) {
       _updateResult(EmotionResult.empty());
       return;
     }
 
-    final face = faces.first;
-    final attentionScore = _calculateAttention(face);
+    final smileScore = (result['smileScore'] as num?)?.toDouble() ?? 0;
+    final leftEyeOpen = (result['leftEyeOpen'] as num?)?.toDouble() ?? 0.5;
+    final rightEyeOpen = (result['rightEyeOpen'] as num?)?.toDouble() ?? 0.5;
+    final yaw = (result['yaw'] as num?)?.toDouble() ?? 0;
+    final pitch = (result['pitch'] as num?)?.toDouble() ?? 0;
+    final confidence = (result['confidence'] as num?)?.toDouble() ?? 0.5;
+
+    final emotion = smileScore > 0.5 ? 'happy' : 'neutral';
+
+    final yawScore = (1.0 - (yaw.abs() / 45.0).clamp(0.0, 1.0)) * 0.4;
+    final pitchScore = (1.0 - (pitch.abs() / 30.0).clamp(0.0, 1.0)) * 0.3;
+    final eyeScore = ((leftEyeOpen + rightEyeOpen) / 2) * 0.3;
+    final attentionScore = ((yawScore + pitchScore + eyeScore) * 100).clamp(0.0, 100.0);
 
     _updateResult(EmotionResult(
-      emotion: face.smilingProbability != null && face.smilingProbability! > 0.7 ? 'happy' : 'neutral',
-      confidence: 0.8,
+      emotion: emotion,
+      confidence: confidence,
       isAttention: attentionScore > 60,
       attentionScore: attentionScore,
     ));
-  }
-
-  /// 计算注意力评分（基于头部姿态和眼睛状态）
-  double _calculateAttention(Face face) {
-    double score = 0.0;
-
-    final headEulerY = face.headEulerAngleY ?? 0.0;
-    final headEulerX = face.headEulerAngleZ ?? 0.0;
-
-    final yawScore = (1.0 - (headEulerY.abs() / 45.0).clamp(0.0, 1.0)) * 0.4;
-    final pitchScore = (1.0 - (headEulerX.abs() / 30.0).clamp(0.0, 1.0)) * 0.3;
-    score += yawScore + pitchScore;
-
-    final leftEyeOpen = face.leftEyeOpenProbability ?? 0.5;
-    final rightEyeOpen = face.rightEyeOpenProbability ?? 0.5;
-    final eyeScore = ((leftEyeOpen + rightEyeOpen) / 2) * 0.3;
-    score += eyeScore;
-
-    return (score * 100).clamp(0.0, 100.0);
   }
 
   void _updateResult(EmotionResult result) {
@@ -197,9 +170,8 @@ class VisionService {
   void dispose() {
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
-    _faceDetector?.close();
     _isInitialized = false;
-    debugPrint('📷 视觉追踪服务已释放');
+    debugPrint('📷 视觉追踪已释放');
   }
 
   bool get isInitialized => _isInitialized;
