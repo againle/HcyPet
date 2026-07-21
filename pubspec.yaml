@@ -63,7 +63,6 @@ dependencies:
   # UI 辅助
   flutter_svg: ^2.0.9
   firebase_auth: ^6.5.6
-  camera: ^0.12.0+2
 dev_dependencies:
   flutter_test:
     sdk: flutter
