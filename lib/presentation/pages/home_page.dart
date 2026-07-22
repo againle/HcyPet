@@ -3,11 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/pet_bloc.dart';
 import '../../models/pet_event.dart';
 import '../../models/pet_state.dart';
-import '../../services/sensor_service.dart';
 import '../pet/pet_widget.dart';
-import '../widgets/voice_recorder_button.dart';
 
-/// 主页
+/// 主页（测试 G：无 SensorService、无 VoiceRecorderButton）
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -16,59 +14,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final SensorService _sensorService = SensorService();
-
   @override
   void initState() {
     super.initState();
-    _initSensor();
-  }
-
-  @override
-  void dispose() {
-    _sensorService.stopListening();
-    super.dispose();
-  }
-
-  void _initSensor() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _sensorService.startListening(
-          onShake: () {
-            if (mounted) {
-              context.read<PetBloc>().add(PetShakeEvent());
-            }
-          },
-          onAccelerometerUpdate: (x, y, z) {},
-        );
-      }
-    });
-  }
-
-  void _showToast(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF4FC3F7),
-          ),
-        ),
-        duration: const Duration(milliseconds: 800),
-        backgroundColor: Colors.black.withOpacity(0.85),
-        elevation: 0,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(
-            color: const Color(0xFF4FC3F7).withOpacity(0.1),
-            width: 0.5,
-          ),
-        ),
-      ),
-    );
   }
 
   @override
@@ -129,31 +77,6 @@ class _HomePageState extends State<HomePage> {
               _buildStatusIndicators(state),
 
               const SizedBox(height: 20),
-
-              // --- 传感器状态指示 ---
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: _sensorService.isListening
-                          ? const Color(0xFF4FC3F7).withOpacity(0.4)
-                          : Colors.red.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _sensorService.isListening ? '传感器已连接' : '传感器未连接',
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: const Color(0xFF4FC3F7).withOpacity(0.15),
-                    ),
-                  ),
-                ],
-              ),
 
               const SizedBox(height: 8),
             ],
@@ -234,24 +157,11 @@ class _HomePageState extends State<HomePage> {
             onTap: () => bloc.add(PetFeedEvent()),
           ),
           const SizedBox(width: 16),
-          // 语音按钮（替换原来的占位）
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              VoiceRecorderButton(
-                size: 48,
-                onRecordingStart: () {},
-                onRecognized: (text) {},
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '语音',
-                style: TextStyle(
-                  fontSize: 9,
-                  color: const Color(0xFF4FC3F7).withOpacity(0.4),
-                ),
-              ),
-            ],
+          // 语音按钮
+          _buildActionButton(
+            icon: '🎤',
+            label: '说话',
+            onTap: () => bloc.add(PetTalkEvent()),
           ),
           const SizedBox(width: 16),
           _buildActionButton(
