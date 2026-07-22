@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/pet_bloc.dart';
 import '../../models/pet_state.dart';
+import '../../theme/design_constants.dart';
 import 'home_page.dart';
 import 'study_page.dart';
 import 'partner_page.dart';
@@ -27,18 +28,21 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: kBackgroundColor,
       body: BlocBuilder<PetBloc, PetState>(
         builder: (context, state) {
-          return _pages[_currentIndex];
+          return IndexedStack(
+            index: _currentIndex,
+            children: _pages,
+          );
         },
       ),
       bottomNavigationBar: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           border: Border(
             top: BorderSide(
-              color: const Color(0xFF4FC3F7).withValues(alpha: 0.05),
-              width: 0.5,
+              color: Color(0x0D4FC3F7), // #4FC3F7 @ 5%
+              width: BottomNavSpec.borderWidth,
             ),
           ),
         ),
@@ -49,18 +53,34 @@ class _MainPageState extends State<MainPage> {
               _currentIndex = index;
             });
           },
-          backgroundColor: Colors.black,
-          selectedItemColor: const Color(0xFF4FC3F7),
-          unselectedItemColor: const Color(0xFF4FC3F7).withValues(alpha: 0.2),
-          selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
-          unselectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w400),
+          backgroundColor: kBackgroundColor,
+          selectedItemColor: BottomNavSpec.selectedColor,
+          unselectedItemColor: BottomNavSpec.unselectedColor,
+          selectedFontSize: 0,
+          unselectedFontSize: 0,
           type: BottomNavigationBarType.fixed,
           elevation: 0,
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.pets_outlined, size: 22), activeIcon: Icon(Icons.pets, size: 22), label: '主页'),
-            BottomNavigationBarItem(icon: Icon(Icons.book_outlined, size: 22), activeIcon: Icon(Icons.book, size: 22), label: '自习室'),
-            BottomNavigationBarItem(icon: Icon(Icons.favorite_border, size: 22), activeIcon: Icon(Icons.favorite, size: 22), label: '伴侣'),
-            BottomNavigationBarItem(icon: Icon(Icons.settings_outlined, size: 22), activeIcon: Icon(Icons.settings, size: 22), label: '设置'),
+            BottomNavigationBarItem(
+              icon: Icon(AppIcons.home, size: BottomNavSpec.iconSize),
+              activeIcon: Icon(AppIcons.homeActive, size: BottomNavSpec.iconSize),
+              label: '',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(AppIcons.study, size: BottomNavSpec.iconSize),
+              activeIcon: Icon(AppIcons.studyActive, size: BottomNavSpec.iconSize),
+              label: '',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(AppIcons.partner, size: BottomNavSpec.iconSize),
+              activeIcon: Icon(AppIcons.partnerActive, size: BottomNavSpec.iconSize),
+              label: '',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(AppIcons.settings, size: BottomNavSpec.iconSize),
+              activeIcon: Icon(AppIcons.settingsActive, size: BottomNavSpec.iconSize),
+              label: '',
+            ),
           ],
         ),
       ),

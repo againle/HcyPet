@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../models/pet_state.dart';
+import '../../theme/design_constants.dart';
 import 'pet_painter.dart';
 
-/// 宠物组件（支持点击交互）
+/// 宠物组件 — V2 呼吸动画（0.98→1.02）
 class PetWidget extends StatefulWidget {
   final PetState state;
   final double size;
@@ -51,7 +52,9 @@ class _PetWidgetState extends State<PetWidget>
       child: AnimatedBuilder(
         animation: _breathController,
         builder: (context, child) {
-          final breathScale = 1.0 + _breathController.value * 0.015;
+          final breathScale = PetSize.breathScaleMin +
+              _breathController.value *
+                  (PetSize.breathScaleMax - PetSize.breathScaleMin);
           return Transform.scale(
             scale: breathScale,
             child: CustomPaint(

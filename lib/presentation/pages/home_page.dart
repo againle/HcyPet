@@ -4,10 +4,11 @@ import '../../bloc/pet_bloc.dart';
 import '../../models/pet_event.dart';
 import '../../models/pet_state.dart';
 import '../../services/sensor_service.dart';
+import '../../theme/design_constants.dart';
 import '../pet/pet_widget.dart';
 import '../widgets/talk_button.dart';
 
-/// 主页（测试 H1：加回 SensorService）
+/// 主页 — V2 极简风格
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -53,83 +54,41 @@ class _HomePageState extends State<HomePage> {
         return SafeArea(
           child: Column(
             children: [
-              // --- 顶部状态栏 ---
+              // --- 极简状态条（右对齐，纯文字）---
               _buildTopBar(state),
 
               // --- 宠物显示区域 ---
               Expanded(
-                flex: 4,
+                flex: 5,
                 child: Center(
                   child: PetWidget(
                     state: state,
-                    size: 300,
+                    size: PetSize.container,
                     onTap: () => _showMoodSnackbar(context, state),
                     onDoubleTap: () => _randomMood(context),
                   ),
                 ),
               ),
 
-              // --- 宠物想法气泡 ---
-              if (state.thought != null)
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4FC3F7).withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: const Color(0xFF4FC3F7).withOpacity(0.1),
-                      width: 0.5,
-                    ),
-                  ),
-                  child: Text(
-                    state.thought!,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: const Color(0xFF4FC3F7).withOpacity(0.6),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+              // --- 系统提示（底部小字，无气泡）---
+              _buildSystemHint(state),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.md),
 
               // --- 快捷互动按钮 ---
               _buildInteractionButtons(context, bloc),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.lg),
 
-              // --- 状态指标 ---
+              // --- 状态进度条 ---
               _buildStatusIndicators(state),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: AppSpacing.md),
 
-              // --- 传感器状态指示 ---
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: _sensorService.isListening
-                          ? const Color(0xFF4FC3F7).withOpacity(0.4)
-                          : Colors.red.withOpacity(0.3),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    '传感器监听中',
-                    style: TextStyle(
-                      fontSize: 8,
-                      color: Color(0xFF4FC3F7),
-                    ),
-                  ),
-                ],
-              ),
+              // --- 传感器微点指示 ---
+              _buildSensorDot(),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: AppSpacing.sm),
             ],
           ),
         );
@@ -137,180 +96,227 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// 顶部信息条：只保留状态信息
+  // ============ 顶部状态条（纯文字，无背景）============
+
   Widget _buildTopBar(PetState state) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xl,
+        vertical: AppSpacing.md,
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.end, // 靠右对齐
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          _buildStatusChip(
-            label: '❤️ ${(state.intimacy * 100).toInt()}%',
-            color: Colors.pink.withOpacity(0.2),
-            textColor: Colors.pink.withOpacity(0.6),
+          // 亲密度
+          Text(
+            '${(state.intimacy * 100).toInt()}%',
+            style: TextStyle(
+              fontSize: StatusBarSpec.fontSize,
+              color: kAccentColor.withValues(alpha: 0.6),
+              fontWeight: kFontRegular,
+              letterSpacing: 0.5,
+            ),
           ),
-          const SizedBox(width: 8),
-          _buildStatusChip(
-            label: state.isAwake ? '● 清醒' : '● 休息',
-            color: state.isAwake
-                ? const Color(0xFF4FC3F7).withOpacity(0.12)
-                : Colors.grey.withOpacity(0.12),
-            textColor: state.isAwake
-                ? const Color(0xFF4FC3F7).withOpacity(0.6)
-                : Colors.grey.withOpacity(0.4),
+          const SizedBox(width: StatusBarSpec.spacing),
+          // 分隔微点
+          Container(
+            width: 2,
+            height: 2,
+            decoration: BoxDecoration(
+              color: kPrimaryColor.withValues(alpha: 0.25),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: StatusBarSpec.spacing),
+          // 清醒/休息状态
+          Text(
+            state.isAwake ? '清醒' : '休息',
+            style: TextStyle(
+              fontSize: StatusBarSpec.fontSize,
+              color: state.isAwake
+                  ? kPrimaryColor.withValues(alpha: StatusBarSpec.textOpacity)
+                  : Colors.white.withValues(alpha: 0.25),
+              fontWeight: kFontRegular,
+              letterSpacing: 0.5,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatusChip({
-    required String label,
-    required Color color,
-    Color? textColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 0.5,
-        ),
-      ),
+  // ============ 系统提示（底部小字）============
+
+  Widget _buildSystemHint(PetState state) {
+    if (state.thought == null || state.thought!.isEmpty) {
+      return const SizedBox(height: SystemHintSpec.fontSize * 1.5);
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxxl),
       child: Text(
-        label,
+        state.thought!,
         style: TextStyle(
-          fontSize: 10,
-          color: textColor ?? Colors.white.withOpacity(0.6),
-          fontWeight: FontWeight.w400,
+          fontSize: SystemHintSpec.fontSize,
+          color: SystemHintSpec.textColor
+              .withValues(alpha: SystemHintSpec.textOpacity),
+          fontWeight: kFontThin,
+          letterSpacing: 0.8,
+          height: 1.4,
         ),
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
+
+  // ============ 互动按钮（纯图标 + 纯文字，无背景框）============
 
   Widget _buildInteractionButtons(BuildContext context, PetBloc bloc) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxl),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _buildActionButton(
-            icon: '🤗',
-            label: '抚摸',
+          _buildTextIconButton(
+            icon: AppIcons.pet,
+            label: '抚触',
             onTap: () => bloc.add(PetPetEvent()),
           ),
-          const SizedBox(width: 16),
-          _buildActionButton(
-            icon: '🍖',
+          SizedBox(width: InteractionButtonSpec.spacing),
+          _buildTextIconButton(
+            icon: AppIcons.feed,
             label: '喂食',
             onTap: () => bloc.add(PetFeedEvent()),
           ),
-          const SizedBox(width: 16),
-          // 对话按钮
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const TalkButton(size: 48),
-              const SizedBox(height: 4),
-              Text(
-                '说话',
-                style: TextStyle(
-                  fontSize: 9,
-                  color: const Color(0xFF4FC3F7).withValues(alpha: 0.4),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: 16),
-          _buildActionButton(
-            icon: '📱',
-            label: '摇晃',
-            onTap: () {
-              context.read<PetBloc>().add(PetShakeEvent());
-            },
+          SizedBox(width: InteractionButtonSpec.spacing),
+          // 说话按钮（保留 TalkButton 功能，样式统一）
+          _buildTalkButton(context),
+          SizedBox(width: InteractionButtonSpec.spacing),
+          _buildTextIconButton(
+            icon: AppIcons.shake,
+            label: '摇一摇',
+            onTap: () => bloc.add(PetShakeEvent()),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildActionButton({
-    required String icon,
+  Widget _buildTextIconButton({
+    required IconData icon,
     required String label,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFF4FC3F7).withOpacity(0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: const Color(0xFF4FC3F7).withOpacity(0.1),
-                width: 0.5,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: InteractionButtonSpec.iconSize,
+              color: kPrimaryColor.withValues(
+                alpha: InteractionButtonSpec.textOpacity,
               ),
             ),
-            child: Center(
-              child: Text(icon, style: const TextStyle(fontSize: 20)),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: InteractionButtonSpec.fontSize,
+                color: kPrimaryColor.withValues(
+                  alpha: InteractionButtonSpec.textOpacity,
+                ),
+                fontWeight: kFontThin,
+                letterSpacing: 1.2,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 9,
-              color: const Color(0xFF4FC3F7).withOpacity(0.4),
+            const SizedBox(height: 2),
+            // 微点指示器（激活态用）
+            Container(
+              width: InteractionButtonSpec.dotSize,
+              height: InteractionButtonSpec.dotSize,
+              decoration: BoxDecoration(
+                color: kPrimaryColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusIndicators(PetState state) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 32),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.02),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.03),
-          width: 0.5,
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTalkButton(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TalkButton(
+          size: InteractionButtonSpec.iconSize + 2,
+          color: kPrimaryColor,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '说话',
+          style: TextStyle(
+            fontSize: InteractionButtonSpec.fontSize,
+            color: kPrimaryColor.withValues(
+              alpha: InteractionButtonSpec.textOpacity,
+            ),
+            fontWeight: kFontThin,
+            letterSpacing: 1.2,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Container(
+          width: InteractionButtonSpec.dotSize,
+          height: InteractionButtonSpec.dotSize,
+          decoration: BoxDecoration(
+            color: kPrimaryColor.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============ 状态进度条（2px 极细）============
+
+  Widget _buildStatusIndicators(PetState state) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxxl),
       child: Row(
         children: [
-          _buildIndicator(
-            label: '😊 心情',
+          _buildProgressBar(
+            label: '心情',
             value: state.happiness,
           ),
-          const SizedBox(width: 16),
-          _buildIndicator(
-            label: '⚡ 精力',
+          const SizedBox(width: AppSpacing.lg),
+          _buildProgressBar(
+            label: '精力',
             value: state.energy,
           ),
-          const SizedBox(width: 16),
-          _buildIndicator(
-            label: '💕 亲密度',
+          const SizedBox(width: AppSpacing.lg),
+          _buildProgressBar(
+            label: '亲密度',
             value: state.intimacy,
+            highlightColor: kAccentColor,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildIndicator({
+  Widget _buildProgressBar({
     required String label,
     required double value,
+    Color? highlightColor,
   }) {
+    final activeColor = highlightColor ?? ProgressBarSpec.activeColor;
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,30 +324,45 @@ class _HomePageState extends State<HomePage> {
           Text(
             label,
             style: TextStyle(
-              fontSize: 8,
-              color: const Color(0xFF4FC3F7).withOpacity(0.3),
+              fontSize: ProgressBarSpec.labelFontSize,
+              color: kPrimaryColor.withValues(
+                alpha: ProgressBarSpec.labelOpacity,
+              ),
+              fontWeight: kFontThin,
+              letterSpacing: 0.8,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: AppSpacing.xs),
           ClipRRect(
-            borderRadius: BorderRadius.circular(2),
+            borderRadius: BorderRadius.circular(ProgressBarSpec.borderRadius),
             child: LinearProgressIndicator(
               value: value,
-              minHeight: 3,
-              backgroundColor: const Color(0xFF4FC3F7).withOpacity(0.06),
-              valueColor: AlwaysStoppedAnimation<Color>(
-                value > 0.7
-                    ? const Color(0xFF4FC3F7)
-                    : value > 0.3
-                        ? const Color(0xFF4FC3F7).withOpacity(0.6)
-                        : const Color(0xFF4FC3F7).withOpacity(0.3),
-              ),
+              minHeight: ProgressBarSpec.height,
+              backgroundColor: ProgressBarSpec.bgColor,
+              valueColor: AlwaysStoppedAnimation<Color>(activeColor),
             ),
           ),
         ],
       ),
     );
   }
+
+  // ============ 传感器微点 ============
+
+  Widget _buildSensorDot() {
+    return Container(
+      width: 3,
+      height: 3,
+      decoration: BoxDecoration(
+        color: _sensorService.isListening
+            ? kPrimaryColor.withValues(alpha: 0.2)
+            : Colors.red.withValues(alpha: 0.15),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  // ============ 调试交互 ============
 
   void _randomMood(BuildContext context) {
     final bloc = context.read<PetBloc>();

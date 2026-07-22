@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../models/pet_state.dart';
+import '../../theme/design_constants.dart';
 
-/// 宠物画布渲染器 - 浅蓝色简约风格
+/// 宠物画布渲染器 — V2 极简线条风格
 class PetPainter extends CustomPainter {
   final PetState state;
   final double size;
 
-  // 浅蓝色调
-  static const Color petColor = Color(0xFF4FC3F7);
+  // 使用设计系统主色
+  static const Color petColor = PetStrokeSpec.color;
 
   const PetPainter({
     required this.state,
@@ -84,21 +85,12 @@ class PetPainter extends CustomPainter {
       );
     canvas.drawPath(rightPath, paint);
 
-    // Zzz 符号
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: '💤',
-        style: TextStyle(
-          fontSize: 28 * scale,
-          color: petColor.withOpacity(0.2),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(
+    // Zzz 符号（纯线条绘制）
+    _drawZzz(
       canvas,
       Offset(center.dx + 30 * scale, center.dy - 50 * scale),
+      scale,
+      opacity: 0.2,
     );
   }
 
@@ -287,21 +279,12 @@ class PetPainter extends CustomPainter {
     );
     canvas.drawRRect(rightRect, paint);
 
-    // Zzz 符号（小号）
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: '💤',
-        style: TextStyle(
-          fontSize: 18 * scale,
-          color: petColor.withOpacity(0.6),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(
+    // Zzz 符号（小号，纯线条）
+    _drawZzz(
       canvas,
       Offset(center.dx + 38 * scale, center.dy - 36 * scale),
+      scale * 0.65,
+      opacity: 0.4,
     );
   }
 
@@ -403,6 +386,38 @@ class PetPainter extends CustomPainter {
     );
     path.close();
     canvas.drawPath(path, paint);
+  }
+
+  /// 纯线条绘制 Zzz（替代 Emoji）
+  void _drawZzz(Canvas canvas, Offset origin, double scale, {double opacity = 0.4}) {
+    final paint = Paint()
+      ..color = petColor.withOpacity(opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0 * scale
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final double zSize = 8.0 * scale;
+    final double zGap = 10.0 * scale;
+    final List<double> zScales = [0.7, 1.0, 1.3];
+    final List<double> zOffsetsX = [-zSize * 0.5, 0.0, zSize * 0.5];
+    final List<double> zOffsetsY = [zSize * 2.0, zSize * 1.0, 0.0];
+
+    for (int i = 0; i < 3; i++) {
+      final double s = zScales[i];
+      final double ox = origin.dx + zOffsetsX[i] * scale;
+      final double oy = origin.dy + zOffsetsY[i] * scale;
+      final double w = zSize * s;
+      final double h = zSize * s;
+
+      final path = Path()
+        ..moveTo(ox - w / 2, oy - h / 2)       // 左上
+        ..lineTo(ox + w / 2, oy - h / 2)        // 右上
+        ..lineTo(ox - w / 2, oy + h / 2)        // 左下
+        ..lineTo(ox + w / 2, oy + h / 2);       // 右下
+
+      canvas.drawPath(path, paint);
+    }
   }
 
   @override

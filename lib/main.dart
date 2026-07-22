@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'bloc/pet_bloc.dart';
 import 'presentation/pages/main_page.dart';
-import 'presentation/widgets/debug_bar.dart';
+import 'theme/design_constants.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,12 +12,6 @@ void main() {
 class HcyPetApp extends StatelessWidget {
   const HcyPetApp({super.key});
 
-  static const _defaultTextStyle = TextStyle(
-    color: Colors.white70,
-    fontSize: 14,
-    decoration: TextDecoration.none,
-  );
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -26,10 +20,11 @@ class HcyPetApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         colorScheme: const ColorScheme.dark().copyWith(
-          primary: const Color(0xFF4FC3F7),
-          secondary: const Color(0xFF4FC3F7),
+          primary: kPrimaryColor,
+          secondary: kPrimaryColor,
         ),
-        scaffoldBackgroundColor: Colors.black,
+        scaffoldBackgroundColor: kBackgroundColor,
+        fontFamily: kFontFamily,
         textTheme: const TextTheme(
           displayLarge: TextStyle(color: Colors.white, decoration: TextDecoration.none),
           displayMedium: TextStyle(color: Colors.white, decoration: TextDecoration.none),
@@ -44,17 +39,7 @@ class HcyPetApp extends StatelessWidget {
           bodySmall: TextStyle(color: Colors.white54, decoration: TextDecoration.none),
           labelLarge: TextStyle(color: Colors.white, decoration: TextDecoration.none),
           labelMedium: TextStyle(color: Colors.white70, decoration: TextDecoration.none),
-          labelSmall: TextStyle(color: Color(0xFF4FC3F7), decoration: TextDecoration.none),
-        ),
-        useMaterial3: false,
-      ),
-      builder: (context, child) => DefaultTextStyle.merge(
-        style: _defaultTextStyle,
-        child: Column(
-          children: [
-            Expanded(child: child!),
-            const DebugBar(),
-          ],
+          labelSmall: TextStyle(color: kPrimaryColor, decoration: TextDecoration.none),
         ),
       ),
       home: BlocProvider(
