@@ -228,6 +228,14 @@ class PetBloc extends Bloc<PetEvent, PetState> {
       return;
     }
 
+    // 午夜/凌晨被唤醒 → 快速回到睡眠
+    if ((hour >= 23 || hour < 5) && state.activity == PetActivity.groggy && state.energy < 0.3) {
+      emit(state.copyWith(
+        activity: PetActivity.sleeping, isAwake: false, mood: PetMood.sleepy, thought: 'zzz...',
+      ));
+      return;
+    }
+
     // 晚上自动入睡 (23点后，精力低)
     if ((hour >= 23 || hour < 6) && state.energy < 0.2 && state.activity != PetActivity.studying) {
       emit(state.copyWith(
@@ -251,10 +259,12 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     double energyDelta;
     if (hour >= 6 && hour < 10) {
       energyDelta = 0.012; // 早晨自然醒来，精力上升
-    } else if (hour >= 10 && hour < 14) {
-      energyDelta = -0.002; // 上午平稳
-    } else if (hour >= 14 && hour < 17) {
-      energyDelta = -0.005; // 午后略困
+    } else if (hour >= 10 && hour < 12) {
+      energyDelta = -0.002;
+    } else if (hour >= 12 && hour < 15) {
+      energyDelta = -0.010; // 午饭后犯困加速
+    } else if (hour >= 15 && hour < 17) {
+      energyDelta = -0.005;
     } else if (hour >= 17 && hour < 21) {
       energyDelta = -0.003; // 傍晚恢复
     } else if (hour >= 21 || hour < 2) {

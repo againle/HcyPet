@@ -451,14 +451,12 @@ class _StudyPageState extends State<StudyPage> {
   }
 
   String _getStudyStatusText() {
-    if (_visionEnabled && _lastAttentionScore < 40) return '你走神了...';
     if (_visionEnabled && _lastEmotion == 'sad') return '别难过，我在这儿陪你';
     if (_visionEnabled && _lastEmotion == 'angry') return '深呼吸，放松一下~';
     return '认真陪伴中...';
   }
 
   Color _getStudyStatusColor() {
-    if (_visionEnabled && _lastAttentionScore < 40) return Colors.orange.withOpacity(0.25);
     if (_visionEnabled && (_lastEmotion == 'sad' || _lastEmotion == 'angry')) return Colors.pink.withOpacity(0.25);
     return const Color(0xFF4FC3F7).withOpacity(0.15);
   }
@@ -502,12 +500,13 @@ class _StudyPageState extends State<StudyPage> {
   void _onEmotionDetected(BuildContext context, EmotionResult result) {
     _lastEmotion = result.emotion;
     _lastAttentionScore = result.attentionScore;
-    if (result.isNegative && result.confidence > 0.6) {
+    // 只在情绪明显负面时提醒（不因低头看书误判走神）
+    if (result.isNegative && result.confidence > 0.5) {
       context.read<PetBloc>().add(PetVisionEvent(
         emotion: result.emotion,
         attentionScore: result.attentionScore,
       ));
     }
-    context.read<StudyBloc>().add(StudyFocusUpdateEvent(result.isAttention));
+    context.read<StudyBloc>().add(StudyFocusUpdateEvent(true));
   }
 }

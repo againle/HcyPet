@@ -34,14 +34,12 @@ class PrimaryAlpha {
 
 // ---------- 字体 ----------
 
-/// 字体族（SF Pro Display → 系统默认 fallback）
-const String kFontFamily = '.SF Pro Display';
+/// 字体族（使用系统默认，清晰可读）
 
-/// 字重映射
-const FontWeight kFontUltralight = FontWeight.w200;
-const FontWeight kFontThin = FontWeight.w100;
-const FontWeight kFontRegular = FontWeight.w400;
-const FontWeight kFontMedium = FontWeight.w500;
+const FontWeight kFontUltralight = FontWeight.w300;
+const FontWeight kFontThin = FontWeight.w300;
+const FontWeight kFontRegular = FontWeight.w500;
+const FontWeight kFontMedium = FontWeight.w600;
 
 // ---------- 尺寸规格 ----------
 
