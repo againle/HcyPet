@@ -43,9 +43,6 @@ dependencies:
   shared_preferences: ^2.2.2
   sqflite: ^2.3.0
 
-  # 语音识别
-  speech_to_text: ^6.6.0
-
   # 传感器
   sensors_plus: ^6.1.0
   shake_plus: ^1.0.0

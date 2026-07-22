@@ -5,6 +5,7 @@ import '../../models/pet_event.dart';
 import '../../models/pet_state.dart';
 import '../../services/sensor_service.dart';
 import '../pet/pet_widget.dart';
+import '../widgets/talk_button.dart';
 
 /// 主页（测试 H1：加回 SensorService）
 class HomePage extends StatefulWidget {
@@ -207,11 +208,20 @@ class _HomePageState extends State<HomePage> {
             onTap: () => bloc.add(PetFeedEvent()),
           ),
           const SizedBox(width: 16),
-          // 语音按钮
-          _buildActionButton(
-            icon: '🎤',
-            label: '说话',
-            onTap: () => bloc.add(PetTalkEvent()),
+          // 对话按钮
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const TalkButton(size: 48),
+              const SizedBox(height: 4),
+              Text(
+                '说话',
+                style: TextStyle(
+                  fontSize: 9,
+                  color: const Color(0xFF4FC3F7).withValues(alpha: 0.4),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 16),
           _buildActionButton(
