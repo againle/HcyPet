@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -107,24 +108,42 @@ class FirebaseService {
   bool get isAuthenticated => _auth?.currentUser != null;
   String? get currentUserId => _currentUserId;
 
+  /// 调试信息（用于 UI 显示）
+  String debugMessage = '';
+  String debugStep = 'idle';
+
+  /// 状态变化通知器
+  final ValueNotifier<int> _changeNotifier = ValueNotifier<int>(0);
+  ValueNotifier<int> get changeNotifier => _changeNotifier;
+
+  void _notifyChange() {
+    _changeNotifier.value++;
+  }
+
   /// 初始化 Firebase
   Future<bool> initialize() async {
     try {
-      // 优先使用自动初始化的默认 app，不存在则手动初始化
+      debugStep = 'checking Firebase.app()';
       try {
         _app = Firebase.app();
-      } catch (_) {
+        debugStep = 'got Firebase.app()';
+      } catch (e1) {
+        debugStep = 'Firebase.app() failed: ${e1.toString().substring(0, 80)}';
         _app = await Firebase.initializeApp();
+        debugStep = 'Firebase.initializeApp() OK';
       }
       _database = FirebaseDatabase.instanceFor(
         app: _app!,
         databaseURL: 'https://hcypet-default-rtdb.firebaseio.com',
       );
       _auth = FirebaseAuth.instanceFor(app: _app!);
-      print('✅ Firebase 初始化成功');
+      debugStep = 'done';
+      _notifyChange();
       return true;
     } catch (e) {
-      print('❌ Firebase 初始化失败: $e');
+      debugMessage = e.toString();
+      debugStep = 'error';
+      _notifyChange();
       return false;
     }
   }
@@ -132,12 +151,16 @@ class FirebaseService {
   /// 匿名登录（无需用户注册）
   Future<bool> signInAnonymously() async {
     try {
+      debugStep = 'signInAnonymously start';
       final result = await _auth!.signInAnonymously();
       _currentUserId = result.user?.uid;
-      print('✅ 匿名登录成功: $_currentUserId');
+      debugStep = 'signed in: $_currentUserId';
+      _notifyChange();
       return true;
     } catch (e) {
-      print('❌ 匿名登录失败: $e');
+      debugMessage = e.toString();
+      debugStep = 'auth error';
+      _notifyChange();
       return false;
     }
   }

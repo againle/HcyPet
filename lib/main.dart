@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'bloc/pet_bloc.dart';
 import 'presentation/pages/main_page.dart';
+import 'presentation/widgets/debug_bar.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,7 +50,12 @@ class HcyPetApp extends StatelessWidget {
       ),
       builder: (context, child) => DefaultTextStyle.merge(
         style: _defaultTextStyle,
-        child: child!,
+        child: Column(
+          children: [
+            Expanded(child: child!),
+            const DebugBar(),
+          ],
+        ),
       ),
       home: BlocProvider(
         create: (_) => PetBloc(),
