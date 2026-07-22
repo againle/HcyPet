@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/pet_bloc.dart';
 import '../../models/pet_event.dart';
 import '../../models/pet_state.dart';
+import '../../models/growth_state.dart';
 import '../../services/sensor_service.dart';
 import '../../theme/design_constants.dart';
 import '../pet/pet_widget.dart';
@@ -75,15 +76,10 @@ class _HomePageState extends State<HomePage> {
 
               const SizedBox(height: AppSpacing.md),
 
-              // --- 快捷互动按钮 ---
+              // --- 快捷互动按钮（放宽间距）---
               _buildInteractionButtons(context, bloc),
 
-              const SizedBox(height: AppSpacing.lg),
-
-              // --- 状态进度条 ---
-              _buildStatusIndicators(state),
-
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.xs),
 
               // --- 传感器微点指示 ---
               _buildSensorDot(),
@@ -96,51 +92,88 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ============ 顶部状态条（纯文字，无背景）============
+  // ============ 顶部状态条（LVL + 三围数值）============
 
   Widget _buildTopBar(PetState state) {
+    final growth = (() {
+      try { return context.read<PetBloc>().growth; }
+      catch (_) { return GrowthState.initial(); }
+    })();
+
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xl,
-        vertical: AppSpacing.md,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.sm),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // 亲密度
+          // 左侧：LVL
           Text(
-            '${(state.intimacy * 100).toInt()}%',
+            'Lv.${growth.level}',
             style: TextStyle(
-              fontSize: StatusBarSpec.fontSize,
-              color: kAccentColor.withValues(alpha: 0.6),
-              fontWeight: kFontRegular,
-              letterSpacing: 0.5,
+              fontSize: 10,
+              color: kAccentColor.withValues(alpha: 0.85),
+              fontWeight: kFontMedium,
             ),
           ),
-          const SizedBox(width: StatusBarSpec.spacing),
-          // 分隔微点
-          Container(
-            width: 2,
-            height: 2,
-            decoration: BoxDecoration(
-              color: kPrimaryColor.withValues(alpha: 0.25),
-              shape: BoxShape.circle,
+          const SizedBox(width: 2),
+          Text(
+            growth.levelTitle,
+            style: TextStyle(
+              fontSize: 9,
+              color: kAccentColor.withValues(alpha: 0.45),
+              fontWeight: kFontThin,
             ),
           ),
-          const SizedBox(width: StatusBarSpec.spacing),
-          // 清醒/休息状态
-          Text(
-            state.isAwake ? '清醒' : '休息',
-            style: TextStyle(
-              fontSize: StatusBarSpec.fontSize,
-              color: state.isAwake
-                  ? kPrimaryColor.withValues(alpha: StatusBarSpec.textOpacity)
-                  : Colors.white.withValues(alpha: 0.25),
-              fontWeight: kFontRegular,
-              letterSpacing: 0.5,
+          const SizedBox(width: 8),
+          // 经验条（LVL右边，TAG左边）
+          Expanded(
+            flex: 2,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(1),
+              child: LinearProgressIndicator(
+                value: growth.experience, minHeight: 2,
+                backgroundColor: const Color(0x0AFF6B9D),
+                valueColor: const AlwaysStoppedAnimation<Color>(kAccentColor),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // 右侧：三围数值 + 状态
+          Expanded(
+            flex: 5,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _buildStatItem('心情', state.happiness),
+                const SizedBox(width: 4),
+                _buildStatItem('精力', state.energy),
+                const SizedBox(width: 4),
+                _buildStatItem('亲密', state.intimacy, isAccent: true),
+                const SizedBox(width: 3),
+                Container(width: 2, height: 2, decoration: BoxDecoration(color: kPrimaryColor.withValues(alpha: 0.2), shape: BoxShape.circle)),
+                const SizedBox(width: 3),
+                Text(
+                  state.isAwake ? '清醒' : '休眠',
+                  style: TextStyle(
+                    fontSize: 7.5,
+                    color: state.isAwake ? kPrimaryColor.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.18),
+                    fontWeight: kFontThin,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, double value, {bool isAccent = false}) {
+    final color = isAccent ? kAccentColor : kPrimaryColor;
+    return Text(
+      '$label ${(value * 100).toInt()}%',
+      style: TextStyle(
+        fontSize: 8.5,
+        color: color.withValues(alpha: 0.65),
+        fontWeight: kFontRegular,
       ),
     );
   }
@@ -183,21 +216,14 @@ class _HomePageState extends State<HomePage> {
             label: '抚触',
             onTap: () => bloc.add(PetPetEvent()),
           ),
-          SizedBox(width: InteractionButtonSpec.spacing),
+          SizedBox(width: InteractionButtonSpec.spacing + 8),
           _buildTextIconButton(
             icon: AppIcons.feed,
             label: '喂食',
             onTap: () => bloc.add(PetFeedEvent()),
           ),
-          SizedBox(width: InteractionButtonSpec.spacing),
-          // 说话按钮（保留 TalkButton 功能，样式统一）
+          SizedBox(width: InteractionButtonSpec.spacing + 8),
           _buildTalkButton(context),
-          SizedBox(width: InteractionButtonSpec.spacing),
-          _buildTextIconButton(
-            icon: AppIcons.shake,
-            label: '摇一摇',
-            onTap: () => bloc.add(PetShakeEvent()),
-          ),
         ],
       ),
     );
@@ -340,6 +366,60 @@ class _HomePageState extends State<HomePage> {
               minHeight: ProgressBarSpec.height,
               backgroundColor: ProgressBarSpec.bgColor,
               valueColor: AlwaysStoppedAnimation<Color>(activeColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============ 养成等级 ============
+
+  Widget _buildGrowthSection(BuildContext context) {
+    final growth = (() {
+      try {
+        return context.read<PetBloc>().growth;
+      } catch (_) {
+        return GrowthState.initial();
+      }
+    })();
+    final level = growth.level;
+    final exp = growth.experience;
+    final title = growth.levelTitle;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxxl),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Text(
+                'Lv.$level $title',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: kAccentColor.withValues(alpha: 0.7),
+                  fontWeight: kFontRegular,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${(exp * 100).toInt()}%',
+                style: TextStyle(
+                  fontSize: 9,
+                  color: kAccentColor.withValues(alpha: 0.4),
+                  fontWeight: kFontThin,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(ProgressBarSpec.borderRadius),
+            child: LinearProgressIndicator(
+              value: exp,
+              minHeight: ProgressBarSpec.height,
+              backgroundColor: ProgressBarSpec.bgColor,
+              valueColor: const AlwaysStoppedAnimation<Color>(kAccentColor),
             ),
           ),
         ],

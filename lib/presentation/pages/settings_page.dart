@@ -56,7 +56,9 @@ class _SettingsPageState extends State<SettingsPage> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 children: [
-                  Text('⚙️ 设置', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w300, color: const Color(0xFF4FC3F7).withOpacity(0.6))),
+                  Icon(Icons.settings_outlined, size: 18, color: const Color(0xFF4FC3F7).withOpacity(0.6)),
+                  const SizedBox(width: 8),
+                  Text('设置', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w300, color: const Color(0xFF4FC3F7).withOpacity(0.6))),
                 ],
               ),
             ),
@@ -106,14 +108,14 @@ class _SettingsPageState extends State<SettingsPage> {
                       DebugConfig.debugEnabled = val;
                     },
                   ),
-                  _buildDebugButton('💤 进入休眠', () { bloc.add(PetSetActivityEvent(PetActivity.sleeping)); _showToast('💤 宠物已休眠'); }),
-                  _buildDebugButton('👀 唤醒宠物', () { bloc.add(PetSetActivityEvent(PetActivity.idle)); _showToast('👀 宠物已唤醒'); }),
+                  _buildDebugButton('进入休眠', () { bloc.add(PetSetActivityEvent(PetActivity.sleeping)); _showToast('宠物已休眠'); }),
+                  _buildDebugButton('唤醒宠物', () { bloc.add(PetSetActivityEvent(PetActivity.idle)); _showToast('宠物已唤醒'); }),
                   const SizedBox(height: 16),
                   _buildSectionTitle('应用信息'),
                   const SizedBox(height: 8),
                   _buildInfoTile('版本', '1.0.0'),
                   _buildInfoTile('平台', 'iOS (SideStore)'),
-                  _buildInfoTile('宠物状态', bloc.state.isAwake ? '🟢 清醒' : '💤 休眠'),
+                  _buildInfoTile('宠物状态', bloc.state.isAwake ? '清醒' : '休眠'),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -133,12 +135,15 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(color: Colors.white.withOpacity(0.02), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white.withOpacity(0.03), width: 0.5)),
-      child: SwitchListTile(
-        title: Text(title, style: TextStyle(fontSize: 13, color: const Color(0xFF4FC3F7).withOpacity(0.5))),
-        subtitle: Text(subtitle, style: TextStyle(fontSize: 10, color: const Color(0xFF4FC3F7).withOpacity(0.15))),
-        value: value, onChanged: onChanged,
-        activeColor: const Color(0xFF4FC3F7), activeTrackColor: const Color(0xFF4FC3F7).withOpacity(0.2),
-        inactiveTrackColor: Colors.white.withOpacity(0.05), contentPadding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        child: SwitchListTile(
+          title: Text(title, style: TextStyle(fontSize: 13, color: const Color(0xFF4FC3F7).withOpacity(0.5))),
+          subtitle: Text(subtitle, style: TextStyle(fontSize: 10, color: const Color(0xFF4FC3F7).withOpacity(0.15))),
+          value: value, onChanged: onChanged,
+          activeColor: const Color(0xFF4FC3F7), activeTrackColor: const Color(0xFF4FC3F7).withOpacity(0.2),
+          inactiveTrackColor: Colors.white.withOpacity(0.05), contentPadding: EdgeInsets.zero,
+        ),
       ),
     );
   }

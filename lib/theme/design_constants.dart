@@ -56,9 +56,9 @@ class PetSize {
 /// 状态条
 class StatusBarSpec {
   StatusBarSpec._();
-  static const double fontSize = 10.0;
+  static const double fontSize = 11.0;
   static const Color textColor = kPrimaryColor;
-  static const double textOpacity = 0.6;
+  static const double textOpacity = 0.80;
   static const double spacing = 8.0;
 }
 
@@ -66,10 +66,10 @@ class StatusBarSpec {
 class InteractionButtonSpec {
   InteractionButtonSpec._();
   static const double iconSize = 22.0;
-  static const double fontSize = 11.0;
+  static const double fontSize = 12.0;
   static const double spacing = 24.0;
   static const Color textColor = kPrimaryColor;
-  static const double textOpacity = 0.5;
+  static const double textOpacity = 0.70;
   static const double underlineWidth = 1.0;
   static const double dotSize = 3.0;
 }
@@ -81,16 +81,16 @@ class ProgressBarSpec {
   static const double borderRadius = 2.0;
   static const Color activeColor = kPrimaryColor;
   static const Color bgColor = Color(0x0F4FC3F7); // #4FC3F7 @ 6%
-  static const double labelFontSize = 8.0;
-  static const double labelOpacity = 0.3;
+  static const double labelFontSize = 9.0;
+  static const double labelOpacity = 0.55;
 }
 
 /// 系统提示
 class SystemHintSpec {
   SystemHintSpec._();
-  static const double fontSize = 11.0;
+  static const double fontSize = 12.0;
   static const Color textColor = kPrimaryColor;
-  static const double textOpacity = 0.3;
+  static const double textOpacity = 0.5;
 }
 
 /// 底部导航
@@ -98,7 +98,7 @@ class BottomNavSpec {
   BottomNavSpec._();
   static const double iconSize = 24.0;
   static const Color selectedColor = kPrimaryColor;
-  static const Color unselectedColor = Color(0x334FC3F7); // #4FC3F7 @ 20%
+  static const Color unselectedColor = Color(0x594FC3F7);
   static const double borderOpacity = 0.05;
   static const double borderWidth = 0.5;
 }

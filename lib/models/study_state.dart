@@ -15,6 +15,9 @@ enum TimerStatus {
   completed,  // 完成
 }
 
+/// 番茄钟阶段
+enum PomodoroPhase { work, rest }
+
 /// 自习室状态
 class StudyState extends Equatable {
   final TimerMode mode;
@@ -24,6 +27,7 @@ class StudyState extends Equatable {
   final int focusScore;          // 专注评分 0-100
   final bool isFocused;          // 是否专注
   final int pomodoroCount;       // 完成的番茄数
+  final PomodoroPhase pomodoroPhase; // 当前番茄阶段
 
   const StudyState({
     this.mode = TimerMode.forward,
@@ -33,6 +37,7 @@ class StudyState extends Equatable {
     this.focusScore = 100,
     this.isFocused = true,
     this.pomodoroCount = 0,
+    this.pomodoroPhase = PomodoroPhase.work,
   });
 
   StudyState copyWith({
@@ -43,6 +48,7 @@ class StudyState extends Equatable {
     int? focusScore,
     bool? isFocused,
     int? pomodoroCount,
+    PomodoroPhase? pomodoroPhase,
   }) {
     return StudyState(
       mode: mode ?? this.mode,
@@ -52,6 +58,7 @@ class StudyState extends Equatable {
       focusScore: focusScore ?? this.focusScore,
       isFocused: isFocused ?? this.isFocused,
       pomodoroCount: pomodoroCount ?? this.pomodoroCount,
+      pomodoroPhase: pomodoroPhase ?? this.pomodoroPhase,
     );
   }
 
@@ -68,31 +75,36 @@ class StudyState extends Equatable {
   /// 进度百分比
   double get progress {
     if (mode == TimerMode.forward || targetSeconds == 0) {
-      final maxDisplay = 5999; // 99分59秒
+      final maxDisplay = 5999;
       return (elapsedSeconds / maxDisplay).clamp(0.0, 1.0);
     } else {
       return (elapsedSeconds / targetSeconds).clamp(0.0, 1.0);
     }
   }
 
-  /// 获取当前阶段名称
+  /// 目标时长显示（分钟）
+  String get targetMinutesDisplay {
+    if (targetSeconds <= 0) return '';
+    return '${targetSeconds ~/ 60} 分钟';
+  }
+
+  /// 阶段标签
   String get phaseLabel {
     if (mode == TimerMode.pomodoro) {
-      if (status == TimerStatus.completed) return '🍅 休息时间';
-      if (elapsedSeconds >= targetSeconds) return '🍅 完成！';
-      return '🍅 专注中';
+      if (status == TimerStatus.completed) {
+        return pomodoroPhase == PomodoroPhase.work ? '专注完成！休息一下吧' : '休息结束';
+      }
+      return pomodoroPhase == PomodoroPhase.work ? '专注中...' : '休息中...';
     }
-    return mode == TimerMode.forward ? '⏱ 正向计时' : '⏱ 倒计时';
+    if (mode == TimerMode.countdown) {
+      return '剩余 $targetMinutesDisplay';
+    }
+    return '已过 ${elapsedSeconds ~/ 60} 分 ${elapsedSeconds % 60} 秒';
   }
 
   @override
   List<Object?> get props => [
-    mode,
-    status,
-    elapsedSeconds,
-    targetSeconds,
-    focusScore,
-    isFocused,
-    pomodoroCount,
+    mode, status, elapsedSeconds, targetSeconds,
+    focusScore, isFocused, pomodoroCount, pomodoroPhase,
   ];
 }

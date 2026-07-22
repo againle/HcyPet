@@ -57,6 +57,7 @@ class _StudyPageState extends State<StudyPage> {
                   } else if (state.status == TimerStatus.idle) {
                     petBloc.add(PetStopStudyingEvent());
                     _visionEnabled = false;
+                    context.read<VisionBloc>().add(VisionStopEvent());
                   }
                 },
               ),
@@ -108,9 +109,9 @@ class _StudyPageState extends State<StudyPage> {
         ),
         child: Row(
           children: [
-            _buildTab('⏱ 正向', 0, studyBloc),
-            _buildTab('⏲ 倒向', 1, studyBloc),
-            _buildTab('🍅 番茄钟', 2, studyBloc),
+            _buildTab('正向', 0, studyBloc),
+            _buildTab('倒向', 1, studyBloc),
+            _buildTab('番茄钟', 2, studyBloc),
           ],
         ),
       ),
@@ -152,90 +153,203 @@ class _StudyPageState extends State<StudyPage> {
       builder: (context, state) {
         final isRunning = state.status == TimerStatus.running;
         final isIdle = state.status == TimerStatus.idle;
+        final isCompleted = state.status == TimerStatus.completed;
+        final isForward = _selectedTabIndex == 0;
+        final isCountdown = _selectedTabIndex == 1;
+        final isPomodoro = _selectedTabIndex == 2;
 
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // 目标时长输入
-            if (_selectedTabIndex != 0 && isIdle)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('目标: ', style: TextStyle(fontSize: 13, color: const Color(0xFF4FC3F7).withOpacity(0.3))),
-                    SizedBox(
-                      width: 48,
-                      child: TextField(
-                        controller: _durationController,
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 16, color: const Color(0xFF4FC3F7)),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-                          enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: const Color(0xFF4FC3F7).withOpacity(0.15)),
-                          ),
-                          focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: const Color(0xFF4FC3F7).withOpacity(0.4)),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text('分钟', style: TextStyle(fontSize: 13, color: const Color(0xFF4FC3F7).withOpacity(0.3))),
-                  ],
+            // --- 正向计时：目标输入 ---
+            if (isForward && isIdle)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text(
+                  '正向计时（无目标限制）',
+                  style: TextStyle(fontSize: 11, color: Color(0x4D4FC3F7)),
                 ),
               ),
 
-            // 大时间
+            // --- 倒计时：目标输入 ---
+            if (isCountdown && isIdle)
+              _buildDurationInput(),
+
+            // --- 番茄钟：预设选择 ---
+            if (isPomodoro && isIdle)
+              _buildPomodoroPreset(),
+
+            // --- 大时间显示 ---
             Text(
               state.timeDisplay,
               style: TextStyle(
                 fontSize: 56,
                 fontWeight: FontWeight.w200,
-                color: state.status == TimerStatus.completed
+                color: isCompleted
                     ? Colors.green.withOpacity(0.5)
-                    : const Color(0xFF4FC3F7),
+                    : isPomodoro && state.pomodoroPhase == PomodoroPhase.rest
+                        ? const Color(0xFF4FC3F7).withOpacity(0.5)
+                        : const Color(0xFF4FC3F7),
                 letterSpacing: 6,
               ),
             ),
 
             const SizedBox(height: 8),
 
-            // 阶段标签
+            // --- 阶段标签 ---
             Text(
               state.phaseLabel,
-              style: TextStyle(fontSize: 11, color: const Color(0xFF4FC3F7).withOpacity(0.2)),
+              style: TextStyle(fontSize: 12, color: const Color(0xFF4FC3F7).withOpacity(0.35)),
             ),
 
-            // 进度条
+            // --- 进度条 ---
             if (!isIdle)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 10),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(2),
                   child: LinearProgressIndicator(
-                    value: state.progress,
+                    value: isCountdown || isPomodoro ? 1.0 - (isIdle ? 0.0 : state.progress) : state.progress,
                     minHeight: 2,
                     backgroundColor: const Color(0xFF4FC3F7).withOpacity(0.05),
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      const Color(0xFF4FC3F7).withOpacity(0.3),
+                      isPomodoro && state.pomodoroPhase == PomodoroPhase.rest
+                          ? Colors.green.withOpacity(0.3)
+                          : const Color(0xFF4FC3F7).withOpacity(0.3),
                     ),
                   ),
                 ),
               ),
 
-            // 番茄计数
-            if (_selectedTabIndex == 2 && state.pomodoroCount > 0)
-              Text(
-                '🍅 × ${state.pomodoroCount}',
-                style: TextStyle(fontSize: 10, color: const Color(0xFF4FC3F7).withOpacity(0.12)),
+            // --- 番茄计数 ---
+            if (isPomodoro && state.pomodoroCount > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    state.pomodoroCount > 8 ? 8 : state.pomodoroCount,
+                    (i) => Container(
+                      width: 6, height: 6,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4FC3F7).withOpacity(i == (state.pomodoroCount > 8 ? 7 : state.pomodoroCount - 1) ? 0.5 : 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // --- 完成后的操作 ---
+            if (isCompleted && isPomodoro)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: GestureDetector(
+                  onTap: () => _nextPomodoroPhase(studyBloc, state),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4FC3F7).withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFF4FC3F7).withOpacity(0.1)),
+                    ),
+                    child: Text(
+                      state.pomodoroPhase == PomodoroPhase.work ? '开始休息' : '开始下一轮',
+                      style: const TextStyle(fontSize: 12, color: Color(0x804FC3F7)),
+                    ),
+                  ),
+                ),
               ),
           ],
         );
       },
+    );
+  }
+
+  void _nextPomodoroPhase(StudyBloc studyBloc, StudyState state) {
+    studyBloc.add(StudyResetEvent());
+  }
+
+  Widget _buildDurationInput() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text('倒计时 ', style: TextStyle(fontSize: 13, color: Color(0x4D4FC3F7))),
+          SizedBox(
+            width: 44,
+            child: TextField(
+              controller: _durationController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, color: Color(0xFF4FC3F7)),
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: const Color(0xFF4FC3F7).withOpacity(0.15)),
+                ),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: const Color(0xFF4FC3F7).withOpacity(0.4)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Text('分钟', style: TextStyle(fontSize: 13, color: Color(0x4D4FC3F7))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPomodoroPreset() {
+    final presets = [25, 45, 50, 90];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        children: [
+          const Text('番茄钟', style: TextStyle(fontSize: 13, color: Color(0x4D4FC3F7))),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: presets.map((mins) {
+              final isSelected = _durationController.text == '$mins';
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: GestureDetector(
+                  onTap: () => setState(() => _durationController.text = '$mins'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF4FC3F7).withOpacity(0.12)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF4FC3F7).withOpacity(0.25)
+                            : const Color(0xFF4FC3F7).withOpacity(0.08),
+                      ),
+                    ),
+                    child: Text(
+                      '$mins min',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isSelected
+                            ? const Color(0xFF4FC3F7)
+                            : const Color(0xFF4FC3F7).withOpacity(0.3),
+                        fontWeight: isSelected ? FontWeight.w500 : FontWeight.w300,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -291,7 +405,7 @@ class _StudyPageState extends State<StudyPage> {
             children: [
               if (isIdle || isPaused)
                 _buildBtn(
-                  isPaused ? '▶ 继续' : '▶ 开始',
+                  isPaused ? '继续' : '开始',
                   () {
                     if (isIdle) {
                       final mode = _selectedTabIndex == 0
@@ -307,10 +421,10 @@ class _StudyPageState extends State<StudyPage> {
                   },
                 ),
               if (isRunning)
-                _buildBtn('⏸ 暂停', () => studyBloc.add(StudyPauseEvent())),
+                _buildBtn('暂停', () => studyBloc.add(StudyPauseEvent())),
               if (!isIdle) ...[
                 const SizedBox(width: 12),
-                _buildBtn(isCompleted ? '↻ 重置' : '⏹ 停止', () => studyBloc.add(StudyResetEvent()), secondary: true),
+                _buildBtn(isCompleted ? '重置' : '停止', () => studyBloc.add(StudyResetEvent()), secondary: true),
               ],
             ],
           ),
@@ -337,10 +451,10 @@ class _StudyPageState extends State<StudyPage> {
   }
 
   String _getStudyStatusText() {
-    if (_visionEnabled && _lastAttentionScore < 40) return '🐾 你走神了...';
-    if (_visionEnabled && _lastEmotion == 'sad') return '💕 别难过，我在这儿陪你';
-    if (_visionEnabled && _lastEmotion == 'angry') return '🌿 深呼吸，放松一下~';
-    return '🐾 认真陪伴中...';
+    if (_visionEnabled && _lastAttentionScore < 40) return '你走神了...';
+    if (_visionEnabled && _lastEmotion == 'sad') return '别难过，我在这儿陪你';
+    if (_visionEnabled && _lastEmotion == 'angry') return '深呼吸，放松一下~';
+    return '认真陪伴中...';
   }
 
   Color _getStudyStatusColor() {
@@ -352,17 +466,32 @@ class _StudyPageState extends State<StudyPage> {
   Widget _buildVisionStatus() {
     return BlocBuilder<VisionBloc, VisionState>(
       builder: (context, state) {
+        final hasError = state.errorMessage != null;
+        final isRunning = state.isEnabled && !hasError;
         return Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(width: 4, height: 4, decoration: BoxDecoration(
-              color: state.isEnabled ? Colors.green.withOpacity(0.3) : Colors.grey.withOpacity(0.15),
+              color: hasError
+                  ? Colors.red.withOpacity(0.3)
+                  : isRunning
+                      ? Colors.green.withOpacity(0.3)
+                      : Colors.grey.withOpacity(0.15),
               shape: BoxShape.circle,
             )),
             const SizedBox(width: 5),
             Text(
-              state.isEnabled ? '👁 视觉追踪中' : '👁 已停止',
-              style: TextStyle(fontSize: 8, color: const Color(0xFF4FC3F7).withOpacity(0.1)),
+              hasError
+                  ? '无法启动'
+                  : isRunning
+                      ? '视觉追踪中'
+                      : '已停止',
+              style: TextStyle(
+                fontSize: 8,
+                color: hasError
+                    ? Colors.red.withOpacity(0.15)
+                    : const Color(0xFF4FC3F7).withOpacity(0.1),
+              ),
             ),
           ],
         );
@@ -374,7 +503,10 @@ class _StudyPageState extends State<StudyPage> {
     _lastEmotion = result.emotion;
     _lastAttentionScore = result.attentionScore;
     if (result.isNegative && result.confidence > 0.6) {
-      context.read<PetBloc>().add(PetTalkEvent(message: result.comfortMessage));
+      context.read<PetBloc>().add(PetVisionEvent(
+        emotion: result.emotion,
+        attentionScore: result.attentionScore,
+      ));
     }
     context.read<StudyBloc>().add(StudyFocusUpdateEvent(result.isAttention));
   }

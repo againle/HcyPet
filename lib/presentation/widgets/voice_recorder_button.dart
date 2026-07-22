@@ -148,7 +148,7 @@ class _VoiceRecorderButtonState extends State<VoiceRecorderButton> {
     // 回调给父组件
     widget.onRecognized?.call(text);
 
-    _showToast('💬 "$text"');
+    _showToast('"$text"');
   }
 
   void _showToast(String message) {

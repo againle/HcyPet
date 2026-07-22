@@ -2,12 +2,12 @@ import 'package:equatable/equatable.dart';
 
 /// 宠物情绪枚举
 enum PetMood {
-  happy,      // 开心 😊
-  calm,       // 平静 😐
-  missing,    // 思念 💭
-  sleepy,     // 困倦 😴
-  sad,        // 难过 😢
-  surprised,  // 惊讶 😮
+  happy,      // 开心
+  calm,       // 平静
+  missing,    // 思念
+  sleepy,     // 困倦
+  sad,        // 难过
+  surprised,  // 惊讶
 }
 
 /// 宠物活动状态
@@ -18,6 +18,8 @@ enum PetActivity {
   studying,   // 陪伴学习
   sleeping,   // 睡觉
   thinking,   // 思考
+  groggy,     // 半睡半醒/刚醒
+  celebrating,// 庆祝
 }
 
 /// 宠物核心状态
@@ -30,7 +32,10 @@ class PetState extends Equatable {
   final double intimacy;     // 0.0 - 1.0（亲密度）
   final bool isAwake;
   final DateTime lastInteraction;
-  final String? thought;     // 宠物内心独白（可选）
+  final String? thought;
+  final double fullness;      // 饱腹度 0.0-1.0
+  final DateTime? lastFedAt;  // 上次喂食时间
+  final int wakeAttempts;     // 早晨唤醒尝试次数     // 宠物内心独白（可选）
 
   const PetState({
     this.petName = '小宠物',
@@ -40,6 +45,9 @@ class PetState extends Equatable {
     this.energy = 0.8,
     this.intimacy = 0.5,
     this.isAwake = true,
+    this.fullness = 0.5,
+    this.lastFedAt,
+    this.wakeAttempts = 0,
     required this.lastInteraction,
     this.thought,
   });
@@ -48,7 +56,7 @@ class PetState extends Equatable {
   factory PetState.initial() {
     return PetState(
       lastInteraction: DateTime.now(),
-      thought: '你好呀~ 🐾',
+      thought: '你好呀~',
     );
   }
 
@@ -68,6 +76,9 @@ class PetState extends Equatable {
       energy: (json['energy'] as num?)?.toDouble() ?? 0.8,
       intimacy: (json['intimacy'] as num?)?.toDouble() ?? 0.5,
       isAwake: json['isAwake'] ?? true,
+      fullness: (json['fullness'] as num?)?.toDouble() ?? 0.5,
+      lastFedAt: json['lastFedAt'] != null ? DateTime.parse(json['lastFedAt']) : null,
+      wakeAttempts: (json['wakeAttempts'] as num?)?.toInt() ?? 0,
       lastInteraction: DateTime.parse(
         json['lastInteraction'] ?? DateTime.now().toIso8601String(),
       ),
@@ -85,6 +96,9 @@ class PetState extends Equatable {
       'energy': energy,
       'intimacy': intimacy,
       'isAwake': isAwake,
+      'fullness': fullness,
+      'lastFedAt': lastFedAt?.toIso8601String(),
+      'wakeAttempts': wakeAttempts,
       'lastInteraction': lastInteraction.toIso8601String(),
       'thought': thought,
     };
@@ -101,6 +115,9 @@ class PetState extends Equatable {
     bool? isAwake,
     DateTime? lastInteraction,
     String? thought,
+    double? fullness,
+    DateTime? lastFedAt,
+    int? wakeAttempts,
   }) {
     return PetState(
       petName: petName ?? this.petName,
@@ -112,6 +129,9 @@ class PetState extends Equatable {
       isAwake: isAwake ?? this.isAwake,
       lastInteraction: lastInteraction ?? this.lastInteraction,
       thought: thought ?? this.thought,
+      fullness: fullness ?? this.fullness,
+      lastFedAt: lastFedAt ?? this.lastFedAt,
+      wakeAttempts: wakeAttempts ?? this.wakeAttempts,
     );
   }
 

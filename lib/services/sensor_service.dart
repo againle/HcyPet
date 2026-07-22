@@ -52,7 +52,7 @@ class SensorService {
     );
 
     _isListening = true;
-    debugPrint('📱 传感器服务已启动');
+    debugPrint('Sensor service started');
   }
 
   /// 停止监听传感器
@@ -66,7 +66,7 @@ class SensorService {
     _shakeDetector = null;
 
     _isListening = false;
-    debugPrint('📱 传感器服务已停止');
+    debugPrint('Sensor service stopped');
   }
 
   /// 是否正在监听

@@ -1,26 +1,58 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../models/pet_state.dart';
 import '../../theme/design_constants.dart';
+import 'idle_behavior_scheduler.dart';
 
-/// 宠物画布渲染器 — V2 极简线条风格
+/// 宠物画布渲染器 — V2 双轨动画 + 路径插值
 class PetPainter extends CustomPainter {
   final PetState state;
   final double size;
 
-  // 使用设计系统主色
+  // 情绪过渡
+  final PetMood? previousMood;
+  final double transitionProgress; // 0.0→1.0
+
+  // 空闲行为
+  final IdleBehaviorState idleBehavior;
+
+  // 特殊动画
+  final double? specialAnimProgress; // 0.0→1.0 特殊动画进度
+
   static const Color petColor = PetStrokeSpec.color;
 
   const PetPainter({
     required this.state,
     this.size = 200,
+    this.previousMood,
+    this.transitionProgress = 1.0,
+    this.idleBehavior = IdleBehaviorState.none,
+    this.specialAnimProgress,
   });
+
+  // 获取当前 mood 参数（考虑过渡）
+  PetMood get _effectiveMood {
+    if (transitionProgress >= 1.0 || previousMood == null) return state.mood;
+    return state.mood;
+  }
 
   @override
   void paint(Canvas canvas, Size canvasSize) {
     final center = Offset(canvasSize.width / 2, canvasSize.height / 2);
     final scale = canvasSize.width / size;
 
-    _drawPet(canvas, center, scale);
+    // 应用歪头偏移
+    final adjustedCenter = _applyHeadTilt(center, scale);
+
+    _drawPet(canvas, adjustedCenter, scale);
+  }
+
+  Offset _applyHeadTilt(Offset center, double scale) {
+    if (idleBehavior.isActive && idleBehavior.type == IdleBehaviorType.headTilt) {
+      final tilt = math.sin(idleBehavior.progress * math.pi) * 4 * scale;
+      return Offset(center.dx + tilt, center.dy);
+    }
+    return center;
   }
 
   void _drawPet(Canvas canvas, Offset center, double scale) {
@@ -29,399 +61,244 @@ class PetPainter extends CustomPainter {
       return;
     }
 
+    // 计算睑裂高度系数（眨眼时缩小）
+    final blinkFactor = _getBlinkFactor();
+    // 打哈欠时眼睛缩小
+    final yawnFactor = _getYawnFactor();
+    final eyeFactor = blinkFactor * yawnFactor;
+
+    // 计算瞳孔偏移（左右看）
+    final pupilOffset = _getPupilOffset(scale);
+
     switch (state.mood) {
       case PetMood.happy:
-        _drawHappy(canvas, center, scale);
+        _drawHappy(canvas, center, scale, blinkFactor: eyeFactor, pupilOffset: pupilOffset);
         break;
       case PetMood.surprised:
-        _drawSurprised(canvas, center, scale);
+        _drawSurprised(canvas, center, scale, blinkFactor: eyeFactor, pupilOffset: pupilOffset);
         break;
       case PetMood.sad:
-        _drawSad(canvas, center, scale);
+        _drawSad(canvas, center, scale, blinkFactor: eyeFactor, pupilOffset: pupilOffset);
         break;
       case PetMood.sleepy:
-        _drawSleepy(canvas, center, scale);
+        _drawSleepy(canvas, center, scale, blinkFactor: eyeFactor, pupilOffset: pupilOffset);
         break;
       case PetMood.missing:
-        _drawMissing(canvas, center, scale);
+        _drawMissing(canvas, center, scale, blinkFactor: eyeFactor, pupilOffset: pupilOffset);
         break;
       case PetMood.calm:
       default:
-        _drawCalm(canvas, center, scale);
+        _drawCalm(canvas, center, scale, blinkFactor: eyeFactor, pupilOffset: pupilOffset);
         break;
     }
   }
 
-  /// 睡眠状态：闭眼 + Zzz
+  // ============ 空闲行为计算 ============
+
+  /// 眨眼因子：1.0=全开, 0.0=闭合
+  double _getBlinkFactor() {
+    if (!idleBehavior.isActive) return 1.0;
+    if (idleBehavior.type != IdleBehaviorType.blink) return 1.0;
+    // 眨眼曲线：0→快速闭合→短暂→快速张开
+    final p = idleBehavior.progress;
+    if (p < 0.2) return 1.0 - (p / 0.2);
+    if (p < 0.8) return 0.0;
+    return (p - 0.8) / 0.2;
+  }
+
+  /// 瞳孔偏移
+  double _getPupilOffset(double scale) {
+    if (!idleBehavior.isActive) return 0;
+    final p = idleBehavior.progress;
+    final maxOffset = 8.0 * scale;
+    switch (idleBehavior.type) {
+      case IdleBehaviorType.lookLeft:
+        return -math.sin(p * math.pi) * maxOffset;
+      case IdleBehaviorType.lookRight:
+        return math.sin(p * math.pi) * maxOffset;
+      case IdleBehaviorType.yawn:
+        return 0; // 打哈欠不动瞳孔
+      default:
+        return 0;
+    }
+  }
+
+  /// 打哈欠时眼睛缩小
+  double _getYawnFactor() {
+    if (!idleBehavior.isActive) return 1.0;
+    if (idleBehavior.type != IdleBehaviorType.yawn) return 1.0;
+    final p = idleBehavior.progress;
+    if (p < 0.3) return 1.0 - (p / 0.3) * 0.7;
+    if (p < 0.7) return 0.3;
+    return 0.3 + ((p - 0.7) / 0.3) * 0.7;
+  }
+
+  // ============ 睡眠 ============
+
   void _drawSleeping(Canvas canvas, Offset center, double scale) {
     final eyeWidth = 16 * scale;
     final spacing = 28 * scale;
-
     final paint = Paint()
       ..color = petColor.withOpacity(0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5 * scale
       ..strokeCap = StrokeCap.round;
 
-    // 左眼闭眼弧线
     final leftPath = Path()
       ..moveTo(center.dx - spacing - eyeWidth / 2, center.dy)
-      ..quadraticBezierTo(
-        center.dx - spacing,
-        center.dy + 6 * scale,
-        center.dx - spacing + eyeWidth / 2,
-        center.dy,
-      );
+      ..quadraticBezierTo(center.dx - spacing, center.dy + 6 * scale, center.dx - spacing + eyeWidth / 2, center.dy);
     canvas.drawPath(leftPath, paint);
 
-    // 右眼闭眼弧线
     final rightPath = Path()
       ..moveTo(center.dx + spacing - eyeWidth / 2, center.dy)
-      ..quadraticBezierTo(
-        center.dx + spacing,
-        center.dy + 6 * scale,
-        center.dx + spacing + eyeWidth / 2,
-        center.dy,
-      );
+      ..quadraticBezierTo(center.dx + spacing, center.dy + 6 * scale, center.dx + spacing + eyeWidth / 2, center.dy);
     canvas.drawPath(rightPath, paint);
 
-    // Zzz 符号（纯线条绘制）
-    _drawZzz(
-      canvas,
-      Offset(center.dx + 30 * scale, center.dy - 50 * scale),
-      scale,
-      opacity: 0.2,
-    );
+    _drawZzz(canvas, Offset(center.dx + 30 * scale, center.dy - 50 * scale), scale, opacity: 0.2);
   }
 
-  /// 平静状态：两只竖立的圆角矩形眼睛
-  void _drawCalm(Canvas canvas, Offset center, double scale) {
-    final eyeWidth = 16 * scale;
-    final eyeHeight = 48 * scale;
-    final spacing = 28 * scale;
-    final radius = 6 * scale;
+  // ============ 平静 ============
 
-    final paint = Paint()
-      ..color = petColor
-      ..style = PaintingStyle.fill;
+  void _drawCalm(Canvas canvas, Offset center, double scale, {double blinkFactor = 1.0, double pupilOffset = 0}) {
+    final eyeWidth = 28 * scale;
+    final eyeHeight = 70 * scale * blinkFactor;
+    final spacing = 34 * scale;
+    final radius = 10 * scale;
+    final paint = Paint()..color = petColor..style = PaintingStyle.fill;
 
-    // 左眼
-    final leftRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(center.dx - spacing, center.dy),
-        width: eyeWidth,
-        height: eyeHeight,
-      ),
-      Radius.circular(radius),
-    );
-    canvas.drawRRect(leftRect, paint);
-
-    // 右眼
-    final rightRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(center.dx + spacing, center.dy),
-        width: eyeWidth,
-        height: eyeHeight,
-      ),
-      Radius.circular(radius),
-    );
-    canvas.drawRRect(rightRect, paint);
+    _drawEye(canvas, Offset(center.dx - spacing + pupilOffset, center.dy), eyeWidth, eyeHeight, radius, paint);
+    _drawEye(canvas, Offset(center.dx + spacing + pupilOffset, center.dy), eyeWidth, eyeHeight, radius, paint);
   }
 
-  /// ============ 开心状态（简化版）============
-  /// 每只眼睛是一条向上弯曲的粗弧线 ⌒
-  void _drawHappy(Canvas canvas, Offset center, double scale) {
-    final eyeSpan = 28 * scale;    // 弧线跨度（宽度）
-    final eyeArch = 18 * scale;    // 向上拱起高度
-    final spacing = 30 * scale;    // 两眼间距
-    final strokeW = 6 * scale;     // 线条粗细
+  // ============ 开心 ============
+
+  void _drawHappy(Canvas canvas, Offset center, double scale, {double blinkFactor = 1.0, double pupilOffset = 0}) {
+    final eyeSpan = 40 * scale;
+    final eyeArch = 30 * scale * blinkFactor;
+    final spacing = 36 * scale;
+    final strokeW = 8 * scale;
 
     final paint = Paint()
-      ..color = petColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeW
-      ..strokeCap = StrokeCap.round;
+      ..color = petColor..style = PaintingStyle.stroke
+      ..strokeWidth = strokeW..strokeCap = StrokeCap.round;
 
-    // 左眼：⌒ 向上弧
     final leftPath = Path()
-      ..moveTo(center.dx - spacing - eyeSpan / 2, center.dy + 4 * scale)
-      ..quadraticBezierTo(
-        center.dx - spacing,
-        center.dy - eyeArch,
-        center.dx - spacing + eyeSpan / 2,
-        center.dy + 4 * scale,
-      );
+      ..moveTo(center.dx - spacing - eyeSpan / 2 + pupilOffset, center.dy + 2 * scale)
+      ..quadraticBezierTo(center.dx - spacing + pupilOffset, center.dy - eyeArch, center.dx - spacing + eyeSpan / 2 + pupilOffset, center.dy + 2 * scale);
     canvas.drawPath(leftPath, paint);
 
-    // 右眼：⌒ 向上弧
     final rightPath = Path()
-      ..moveTo(center.dx + spacing - eyeSpan / 2, center.dy + 4 * scale)
-      ..quadraticBezierTo(
-        center.dx + spacing,
-        center.dy - eyeArch,
-        center.dx + spacing + eyeSpan / 2,
-        center.dy + 4 * scale,
-      );
+      ..moveTo(center.dx + spacing - eyeSpan / 2 + pupilOffset, center.dy + 2 * scale)
+      ..quadraticBezierTo(center.dx + spacing + pupilOffset, center.dy - eyeArch, center.dx + spacing + eyeSpan / 2 + pupilOffset, center.dy + 2 * scale);
     canvas.drawPath(rightPath, paint);
   }
 
-  /// 惊讶状态：眼睛放大 + O 型嘴巴
-  void _drawSurprised(Canvas canvas, Offset center, double scale) {
-    final eyeSize = 32 * scale; // 放大
-    final spacing = 34 * scale;
-    final radius = 8 * scale;
+  // ============ 惊讶 ============
 
-    final paint = Paint()
-      ..color = petColor
-      ..style = PaintingStyle.fill;
+  void _drawSurprised(Canvas canvas, Offset center, double scale, {double blinkFactor = 1.0, double pupilOffset = 0}) {
+    final eyeSize = 52 * scale * blinkFactor;
+    final spacing = 40 * scale;
+    final radius = 12 * scale;
+    final paint = Paint()..color = petColor..style = PaintingStyle.fill;
 
-    // 左眼（放大）
-    final leftRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(center.dx - spacing, center.dy),
-        width: eyeSize,
-        height: eyeSize,
-      ),
-      Radius.circular(radius),
-    );
-    canvas.drawRRect(leftRect, paint);
-
-    // 右眼（放大）
-    final rightRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(center.dx + spacing, center.dy),
-        width: eyeSize,
-        height: eyeSize,
-      ),
-      Radius.circular(radius),
-    );
-    canvas.drawRRect(rightRect, paint);
+    _drawEye(canvas, Offset(center.dx - spacing + pupilOffset, center.dy), eyeSize, eyeSize, radius, paint);
+    _drawEye(canvas, Offset(center.dx + spacing + pupilOffset, center.dy), eyeSize, eyeSize, radius, paint);
 
     // O 型嘴巴
-    final mouthPaint = Paint()
-      ..color = petColor
-      ..style = PaintingStyle.fill;
+    final mouthPaint = Paint()..color = petColor..style = PaintingStyle.fill;
+    canvas.drawOval(Rect.fromCenter(center: Offset(center.dx, center.dy + 36 * scale), width: 16 * scale, height: 20 * scale), mouthPaint);
+  }
 
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(center.dx, center.dy + 36 * scale),
-        width: 16 * scale,
-        height: 20 * scale,
-      ),
-      mouthPaint,
+  // ============ 难过 ============
+
+  /// 皱眉：宽长方形眼睛（宽度同平静），高度压缩
+  void _drawSad(Canvas canvas, Offset center, double scale, {double blinkFactor = 1.0, double pupilOffset = 0}) {
+    final eyeW = 28 * scale;
+    final eyeH = 10 * scale * blinkFactor;
+    final spacing = 34 * scale;
+    final radius = 3 * scale;
+
+    final paint = Paint()..color = petColor.withOpacity(0.5)..style = PaintingStyle.fill;
+
+    _drawEye(canvas, Offset(center.dx - spacing + pupilOffset, center.dy), eyeW, eyeH, radius, paint);
+    _drawEye(canvas, Offset(center.dx + spacing + pupilOffset, center.dy), eyeW, eyeH, radius, paint);
+  }
+
+  // ============ 困倦 ============
+
+  void _drawSleepy(Canvas canvas, Offset center, double scale, {double blinkFactor = 1.0, double pupilOffset = 0}) {
+    final eyeWidth = 28 * scale;
+    final eyeHeight = math.max(8 * scale, 28 * scale * blinkFactor);
+    final spacing = 34 * scale;
+    final radius = 10 * scale;
+    final paint = Paint()..color = petColor..style = PaintingStyle.fill;
+
+    _drawEye(canvas, Offset(center.dx - spacing + pupilOffset, center.dy + 2 * scale), eyeWidth, eyeHeight, radius, paint);
+    _drawEye(canvas, Offset(center.dx + spacing + pupilOffset, center.dy + 2 * scale), eyeWidth, eyeHeight, radius, paint);
+
+    _drawZzz(canvas, Offset(center.dx + 38 * scale, center.dy - 36 * scale), scale * 0.65, opacity: 0.4);
+  }
+
+  // ============ 思念 ============
+
+  void _drawMissing(Canvas canvas, Offset center, double scale, {double blinkFactor = 1.0, double pupilOffset = 0}) {
+    final eyeWidth = 20 * scale;
+    final eyeHeight = 78 * scale * blinkFactor;
+    final spacing = 30 * scale;
+    final radius = 9 * scale;
+    final paint = Paint()..color = petColor..style = PaintingStyle.fill;
+
+    _drawEye(canvas, Offset(center.dx - spacing + pupilOffset, center.dy), eyeWidth, eyeHeight, radius, paint);
+    _drawEye(canvas, Offset(center.dx + spacing + pupilOffset, center.dy), eyeWidth, eyeHeight, radius, paint);
+
+    final heartPaint = Paint()..color = petColor.withOpacity(0.7)..style = PaintingStyle.fill;
+    _drawSmallHeart(canvas, center: Offset(center.dx, center.dy - 40 * scale), size: 8 * scale, paint: heartPaint);
+    _drawSmallHeart(canvas, center: Offset(center.dx - 22 * scale, center.dy - 46 * scale), size: 6 * scale, paint: Paint()..color = petColor.withOpacity(0.5)..style = PaintingStyle.fill);
+    _drawSmallHeart(canvas, center: Offset(center.dx + 22 * scale, center.dy - 46 * scale), size: 6 * scale, paint: Paint()..color = petColor.withOpacity(0.5)..style = PaintingStyle.fill);
+  }
+
+  // ============ 辅助绘制 ============
+
+  void _drawEye(Canvas canvas, Offset center, double w, double h, double r, Paint paint) {
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: center, width: w, height: h), Radius.circular(r)),
+      paint,
     );
   }
 
-  /// 难过状态：眼睛向内靠拢 + 略微下移，不画嘴巴
-  void _drawSad(Canvas canvas, Offset center, double scale) {
-    final eyeWidth = 14 * scale;
-    final eyeHeight = 40 * scale;
-    final spacing = 18 * scale; // 靠拢
-    final radius = 6 * scale;
-
-    final paint = Paint()
-      ..color = petColor
-      ..style = PaintingStyle.fill;
-
-    // 左眼（向内靠拢，略微下移）
-    final leftRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(center.dx - spacing, center.dy + 6 * scale),
-        width: eyeWidth,
-        height: eyeHeight,
-      ),
-      Radius.circular(radius),
-    );
-    canvas.drawRRect(leftRect, paint);
-
-    // 右眼（向内靠拢，略微下移）
-    final rightRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(center.dx + spacing, center.dy + 6 * scale),
-        width: eyeWidth,
-        height: eyeHeight,
-      ),
-      Radius.circular(radius),
-    );
-    canvas.drawRRect(rightRect, paint);
-  }
-
-  /// 困倦状态：眼睛变短（高度压缩）+ 小 Zzz 符号
-  void _drawSleepy(Canvas canvas, Offset center, double scale) {
-    final eyeWidth = 16 * scale;
-    final eyeHeight = 16 * scale; // 大幅缩短
-    final spacing = 28 * scale;
-    final radius = 6 * scale;
-
-    final paint = Paint()
-      ..color = petColor
-      ..style = PaintingStyle.fill;
-
-    // 左眼（缩短）
-    final leftRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(center.dx - spacing, center.dy + 4 * scale),
-        width: eyeWidth,
-        height: eyeHeight,
-      ),
-      Radius.circular(radius),
-    );
-    canvas.drawRRect(leftRect, paint);
-
-    // 右眼（缩短）
-    final rightRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(center.dx + spacing, center.dy + 4 * scale),
-        width: eyeWidth,
-        height: eyeHeight,
-      ),
-      Radius.circular(radius),
-    );
-    canvas.drawRRect(rightRect, paint);
-
-    // Zzz 符号（小号，纯线条）
-    _drawZzz(
-      canvas,
-      Offset(center.dx + 38 * scale, center.dy - 36 * scale),
-      scale * 0.65,
-      opacity: 0.4,
-    );
-  }
-
-  /// 思念状态：眼睛拉长 + 眯眯眼（宽度变窄）+ 上方冒爱心
-  void _drawMissing(Canvas canvas, Offset center, double scale) {
-    final eyeWidth = 10 * scale; // 变窄（眯眯眼）
-    final eyeHeight = 56 * scale; // 拉长
-    final spacing = 26 * scale;
-    final radius = 5 * scale;
-
-    final paint = Paint()
-      ..color = petColor
-      ..style = PaintingStyle.fill;
-
-    // 左眼（拉长 + 变窄）
-    final leftRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(center.dx - spacing, center.dy),
-        width: eyeWidth,
-        height: eyeHeight,
-      ),
-      Radius.circular(radius),
-    );
-    canvas.drawRRect(leftRect, paint);
-
-    // 右眼（拉长 + 变窄）
-    final rightRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(
-        center: Offset(center.dx + spacing, center.dy),
-        width: eyeWidth,
-        height: eyeHeight,
-      ),
-      Radius.circular(radius),
-    );
-    canvas.drawRRect(rightRect, paint);
-
-    // 上方冒爱心（3颗小爱心飘出）
-    final heartPaint = Paint()
-      ..color = petColor.withOpacity(0.7)
-      ..style = PaintingStyle.fill;
-
-    // 爱心1（中间偏上）
-    _drawSmallHeart(
-      canvas,
-      center: Offset(center.dx, center.dy - 40 * scale),
-      size: 8 * scale,
-      paint: heartPaint,
-    );
-
-    // 爱心2（左上方）
-    _drawSmallHeart(
-      canvas,
-      center: Offset(center.dx - 22 * scale, center.dy - 46 * scale),
-      size: 6 * scale,
-      paint: Paint()
-        ..color = petColor.withOpacity(0.5)
-        ..style = PaintingStyle.fill,
-    );
-
-    // 爱心3（右上方）
-    _drawSmallHeart(
-      canvas,
-      center: Offset(center.dx + 22 * scale, center.dy - 46 * scale),
-      size: 6 * scale,
-      paint: Paint()
-        ..color = petColor.withOpacity(0.5)
-        ..style = PaintingStyle.fill,
-    );
-  }
-
-  /// 绘制小爱心
   void _drawSmallHeart(Canvas canvas, {required Offset center, required double size, required Paint paint}) {
-    final path = Path();
-
-    path.moveTo(center.dx, center.dy + size * 0.4);
-    path.cubicTo(
-      center.dx - size * 0.3,
-      center.dy - size * 0.2,
-      center.dx - size * 0.6,
-      center.dy - size * 0.4,
-      center.dx - size * 0.3,
-      center.dy - size * 0.7,
-    );
-    path.cubicTo(
-      center.dx,
-      center.dy - size * 0.9,
-      center.dx + size * 0.3,
-      center.dy - size * 0.7,
-      center.dx + size * 0.6,
-      center.dy - size * 0.4,
-    );
-    path.cubicTo(
-      center.dx + size * 0.6,
-      center.dy - size * 0.2,
-      center.dx + size * 0.3,
-      center.dy + size * 0.2,
-      center.dx,
-      center.dy + size * 0.4,
-    );
-    path.close();
+    final path = Path()
+      ..moveTo(center.dx, center.dy + size * 0.4)
+      ..cubicTo(center.dx - size * 0.3, center.dy - size * 0.2, center.dx - size * 0.6, center.dy - size * 0.4, center.dx - size * 0.3, center.dy - size * 0.7)
+      ..cubicTo(center.dx, center.dy - size * 0.9, center.dx + size * 0.3, center.dy - size * 0.7, center.dx + size * 0.6, center.dy - size * 0.4)
+      ..cubicTo(center.dx + size * 0.6, center.dy - size * 0.2, center.dx + size * 0.3, center.dy + size * 0.2, center.dx, center.dy + size * 0.4)
+      ..close();
     canvas.drawPath(path, paint);
   }
 
-  /// 纯线条绘制 Zzz（替代 Emoji）
   void _drawZzz(Canvas canvas, Offset origin, double scale, {double opacity = 0.4}) {
     final paint = Paint()
-      ..color = petColor.withOpacity(opacity)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0 * scale
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+      ..color = petColor.withOpacity(opacity)..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0 * scale..strokeCap = StrokeCap.round..strokeJoin = StrokeJoin.round;
 
-    final double zSize = 8.0 * scale;
-    final double zGap = 10.0 * scale;
-    final List<double> zScales = [0.7, 1.0, 1.3];
-    final List<double> zOffsetsX = [-zSize * 0.5, 0.0, zSize * 0.5];
-    final List<double> zOffsetsY = [zSize * 2.0, zSize * 1.0, 0.0];
+    final zSize = 8.0 * scale;
+    final zScales = [0.7, 1.0, 1.3];
+    final zOffsetsX = [-zSize * 0.5, 0.0, zSize * 0.5];
+    final zOffsetsY = [zSize * 2.0, zSize * 1.0, 0.0];
 
     for (int i = 0; i < 3; i++) {
-      final double s = zScales[i];
-      final double ox = origin.dx + zOffsetsX[i] * scale;
-      final double oy = origin.dy + zOffsetsY[i] * scale;
-      final double w = zSize * s;
-      final double h = zSize * s;
-
-      final path = Path()
-        ..moveTo(ox - w / 2, oy - h / 2)       // 左上
-        ..lineTo(ox + w / 2, oy - h / 2)        // 右上
-        ..lineTo(ox - w / 2, oy + h / 2)        // 左下
-        ..lineTo(ox + w / 2, oy + h / 2);       // 右下
-
-      canvas.drawPath(path, paint);
+      final s = zScales[i];
+      final ox = origin.dx + zOffsetsX[i] * scale;
+      final oy = origin.dy + zOffsetsY[i] * scale;
+      final w = zSize * s;
+      canvas.drawPath(Path()
+        ..moveTo(ox - w / 2, oy - w / 2)
+        ..lineTo(ox + w / 2, oy - w / 2)
+        ..lineTo(ox - w / 2, oy + w / 2)
+        ..lineTo(ox + w / 2, oy + w / 2), paint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant PetPainter oldDelegate) {
-    return oldDelegate.state != state;
-  }
+  bool shouldRepaint(covariant PetPainter oldDelegate) => true;
 }

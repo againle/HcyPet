@@ -220,7 +220,7 @@ class FirebaseService {
 
       return relation;
     } catch (e) {
-      print('❌ 创建配对失败: $e');
+      print('[ERROR] 创建配对失败: $e');
       return null;
     }
   }
@@ -263,7 +263,7 @@ class FirebaseService {
 
       return null; // 成功
     } catch (e) {
-      print('❌ 加入配对失败: $e');
+      print('[ERROR] 加入配对失败: $e');
       return '配对失败，请重试';
     }
   }
@@ -278,7 +278,7 @@ class FirebaseService {
         await _savePetState(petId, state);
       }
     } catch (e) {
-      print('❌ 保存宠物状态失败: $e');
+      print('[ERROR] 保存宠物状态失败: $e');
     }
   }
 

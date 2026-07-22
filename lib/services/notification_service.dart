@@ -77,7 +77,7 @@ class NotificationService {
     final id = DateTime.now().millisecondsSinceEpoch % 100000;
     await showNotification(
       id: id.toInt(),
-      title: '💕 $fromName',
+      title: '$fromName',
       body: message.length > 50 ? '${message.substring(0, 50)}...' : message,
       payload: 'partner_message',
     );
@@ -88,7 +88,7 @@ class NotificationService {
     final id = DateTime.now().millisecondsSinceEpoch % 100000 + 1;
     await showNotification(
       id: id.toInt(),
-      title: '📚 自习完成！',
+      title: '自习完成！',
       body: message,
       payload: 'study_complete',
     );

@@ -140,19 +140,19 @@ class _PetPreviewView extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _buildActionButton(
-                    icon: '🤗',
+                    icon: Icons.pets,
                     label: '抚摸',
                     onTap: () => bloc.add(PetPetEvent()),
                   ),
                   const SizedBox(width: 16),
                   _buildActionButton(
-                    icon: '🍖',
+                    icon: Icons.restaurant_outlined,
                     label: '喂食',
                     onTap: () => bloc.add(PetFeedEvent()),
                   ),
                   const SizedBox(width: 16),
                   _buildActionButton(
-                    icon: '📚',
+                    icon: Icons.menu_book_outlined,
                     label: '学习',
                     onTap: () => bloc.add(PetStartStudyingEvent()),
                   ),
@@ -179,7 +179,7 @@ class _PetPreviewView extends StatelessWidget {
   }
 
   Widget _buildActionButton({
-    required String icon,
+    required IconData icon,
     required String label,
     required VoidCallback onTap,
   }) {
@@ -197,9 +197,10 @@ class _PetPreviewView extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
+            Icon(
               icon,
-              style: const TextStyle(fontSize: 14),
+              size: 14,
+              color: const Color(0xFF4FC3F7).withOpacity(0.5),
             ),
             const SizedBox(width: 4),
             Text(
@@ -218,17 +219,17 @@ class _PetPreviewView extends StatelessWidget {
   String _getMoodDisplayName(PetMood mood) {
     switch (mood) {
       case PetMood.happy:
-        return '☺ 开心';
+        return '开心';
       case PetMood.calm:
-        return '· 平静';
+        return '平静';
       case PetMood.missing:
-        return '♥ 思念';
+        return '思念';
       case PetMood.sleepy:
-        return '◌ 困倦';
+        return '困倦';
       case PetMood.sad:
-        return '☹ 难过';
+        return '难过';
       case PetMood.surprised:
-        return '○ 惊讶';
+        return '惊讶';
     }
   }
 

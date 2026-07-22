@@ -48,8 +48,8 @@ class _PartnerPageState extends State<PartnerPage> {
   final ScrollController _scrollController = ScrollController();
 
   final List<String> _quickMessages = [
-    '💭 想你了', '☕ 休息一下', '💪 加油', '🌙 晚安',
-    '🌅 早安', '❤️ 爱你', '📚 学习加油', '🎵 分享一首歌',
+    '想你了', '休息一下', '加油', '晚安',
+    '早安', '爱你', '学习加油', '分享一首歌',
   ];
 
   @override
@@ -316,7 +316,7 @@ class _PartnerPageState extends State<PartnerPage> {
         if (index != -1) {
           _messages[index] = ChatMessage(
             id: localMsg.id,
-            text: '❌ $messageText',
+            text: '! $messageText',
             isFromMe: true,
             timestamp: localMsg.timestamp,
           );
@@ -413,7 +413,7 @@ class _PartnerPageState extends State<PartnerPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('❌', style: TextStyle(fontSize: 48)),
+          const Text('X', style: TextStyle(fontSize: 48)),
           const SizedBox(height: 16),
           Text(
             _errorMessage!,
@@ -455,7 +455,7 @@ class _PartnerPageState extends State<PartnerPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('💑', style: TextStyle(fontSize: 64)),
+          const Icon(Icons.people_outline, size: 64, color: Color(0x4D4FC3F7)),
           const SizedBox(height: 16),
           Text(
             '尚未配对',
@@ -511,13 +511,13 @@ class _PartnerPageState extends State<PartnerPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _buildActionButton(
-                icon: '📤',
+                icon: Icons.person_add_outlined,
                 label: '创建配对',
                 onTap: _createPair,
               ),
               const SizedBox(width: 16),
               _buildActionButton(
-                icon: '📥',
+                icon: Icons.login,
                 label: '加入配对',
                 onTap: _joinPair,
               ),
@@ -575,7 +575,7 @@ class _PartnerPageState extends State<PartnerPage> {
           ),
           const Spacer(),
           Text(
-            _partnerOnline ? '🟢 在线' : '⚪ 离线',
+            _partnerOnline ? '在线' : '离线',
             style: TextStyle(
               fontSize: 10,
               color: _partnerOnline
@@ -600,7 +600,7 @@ class _PartnerPageState extends State<PartnerPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            '🐾 宠物状态已同步',
+            '宠物状态已同步',
             style: TextStyle(
               fontSize: 9,
               color: const Color(0xFF4FC3F7).withOpacity(0.15),
@@ -617,7 +617,7 @@ class _PartnerPageState extends State<PartnerPage> {
           ),
           const SizedBox(width: 8),
           Text(
-            '❤️ ${(state.intimacy * 100).toInt()}%',
+            '${(state.intimacy * 100).toInt()}%',
             style: TextStyle(
               fontSize: 9,
               color: const Color(0xFF4FC3F7).withOpacity(0.15),
@@ -633,7 +633,7 @@ class _PartnerPageState extends State<PartnerPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('💬', style: TextStyle(fontSize: 32)),
+          const Icon(Icons.chat_bubble_outline, size: 32, color: Color(0x264FC3F7)),
           const SizedBox(height: 8),
           Text(
             '发送消息给伴侣',
@@ -735,7 +735,7 @@ class _PartnerPageState extends State<PartnerPage> {
   }
 
   Widget _buildActionButton({
-    required String icon,
+    required IconData icon,
     required String label,
     required VoidCallback onTap,
   }) {
@@ -754,7 +754,7 @@ class _PartnerPageState extends State<PartnerPage> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(icon, style: const TextStyle(fontSize: 14)),
+            Icon(icon, size: 14, color: const Color(0xFF4FC3F7).withOpacity(0.4)),
             const SizedBox(width: 6),
             Text(
               label,
@@ -837,7 +837,7 @@ class _PartnerPageState extends State<PartnerPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('💬', style: TextStyle(fontSize: 32)),
+          const Icon(Icons.chat_bubble_outline, size: 32, color: Color(0x264FC3F7)),
           const SizedBox(height: 8),
           Text('暂无消息', style: TextStyle(fontSize: 11, color: const Color(0xFF4FC3F7).withOpacity(0.15))),
           const SizedBox(height: 4),

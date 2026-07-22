@@ -65,3 +65,16 @@ class PetPartnerMessageEvent extends PetEvent {
   final String message;
   const PetPartnerMessageEvent(this.message);
 }
+
+/// 视觉检测结果（自习室专注/情绪检测）
+class PetVisionEvent extends PetEvent {
+  final String emotion;
+  final double attentionScore;
+  const PetVisionEvent({required this.emotion, required this.attentionScore});
+
+  @override
+  List<Object?> get props => [emotion, attentionScore];
+}
+
+/// 清除系统提示（内部事件）
+class ClearThoughtEvent extends PetEvent {}

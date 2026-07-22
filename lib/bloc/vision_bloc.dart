@@ -73,24 +73,34 @@ class VisionBloc extends Bloc<VisionEvent, VisionState> {
     }
   }
 
-  void _onStart(VisionStartEvent event, Emitter<VisionState> emit) {
+  Future<void> _onStart(VisionStartEvent event, Emitter<VisionState> emit) async {
+    // 确保已初始化
     if (!state.isInitialized) {
-      add(VisionInitEvent());
-      return;
+      final ok = await _service.initialize();
+      if (!ok) {
+        emit(state.copyWith(errorMessage: '初始化失败'));
+        return;
+      }
+      emit(state.copyWith(isInitialized: true));
     }
 
     _service.onEmotionDetected = (result) {
-      add(VisionDetectedEvent(result));
+      if (!isClosed) add(VisionDetectedEvent(result));
     };
     _service.onError = (error) {
-      add(VisionErrorEvent(error));
+      if (!isClosed) add(VisionErrorEvent(error));
     };
 
-    emit(state.copyWith(isEnabled: true, isDetecting: true));
+    final started = await _service.start();
+    emit(state.copyWith(
+      isEnabled: started,
+      isDetecting: started,
+      errorMessage: started ? null : '摄像头启动失败',
+    ));
   }
 
-  void _onStop(VisionStopEvent event, Emitter<VisionState> emit) {
-    _service.dispose();
+  Future<void> _onStop(VisionStopEvent event, Emitter<VisionState> emit) async {
+    await _service.stop();
     emit(state.copyWith(
       isEnabled: false,
       isDetecting: false,
@@ -108,6 +118,8 @@ class VisionBloc extends Bloc<VisionEvent, VisionState> {
 
   @override
   Future<void> close() {
+    _service.onEmotionDetected = null;
+    _service.onError = null;
     _service.dispose();
     return super.close();
   }

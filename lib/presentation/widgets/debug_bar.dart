@@ -34,7 +34,7 @@ class _DebugBarState extends State<DebugBar> {
               Row(
                 children: [
                   const Text(
-                    '🔧 DEBUG',
+                    'DEBUG',
                     style: TextStyle(
                       color: Color(0xFFFFEB3B),
                       fontSize: 11,
@@ -59,7 +59,7 @@ class _DebugBarState extends State<DebugBar> {
                       );
                     },
                     child: Text(
-                      '📋 复制',
+                      '复制',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.3),
                         fontSize: 9,
@@ -71,9 +71,9 @@ class _DebugBarState extends State<DebugBar> {
               const SizedBox(height: 6),
               _row('Step', _firebase.debugStep,
                   _firebase.debugStep == 'done' ? Colors.green : Colors.orange),
-              _row('Init', _firebase.isInitialized ? '✅ OK' : '❌ FAIL',
+              _row('Init', _firebase.isInitialized ? 'OK' : 'FAIL',
                   _firebase.isInitialized ? Colors.green : Colors.red),
-              _row('Auth', _firebase.isAuthenticated ? '✅ OK' : '❌ NOT',
+              _row('Auth', _firebase.isAuthenticated ? 'OK' : 'NOT',
                   _firebase.isAuthenticated ? Colors.green : Colors.orange),
               _row('UID', _firebase.currentUserId ?? 'null', Colors.white38),
               if (_firebase.debugMessage.isNotEmpty)
