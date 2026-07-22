@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'bloc/pet_bloc.dart';
 import 'models/pet_state.dart';
-import 'presentation/pet/pet_painter.dart';
+import 'presentation/pet/pet_widget.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,7 +29,7 @@ class HcyPetApp extends StatelessWidget {
   }
 }
 
-/// 测试 C：PetBloc + CustomPaint 结合（无动画、无传感器）
+/// 测试 D：PetBloc + PetWidget（含 AnimationController 呼吸动画）
 class TestPage extends StatelessWidget {
   const TestPage({super.key});
 
@@ -40,12 +40,9 @@ class TestPage extends StatelessWidget {
       body: Center(
         child: BlocBuilder<PetBloc, PetState>(
           builder: (context, state) {
-            return CustomPaint(
-              size: const Size(300, 300),
-              painter: PetPainter(
-                state: state,
-                size: 300,
-              ),
+            return PetWidget(
+              state: state,
+              size: 300,
             );
           },
         ),
