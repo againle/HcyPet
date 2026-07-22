@@ -29,9 +29,16 @@ class HcyPetApp extends StatelessWidget {
   }
 }
 
-/// 测试 D：PetBloc + PetWidget（含 AnimationController 呼吸动画）
-class TestPage extends StatelessWidget {
+/// 测试 E：PetBloc + PetWidget + BottomNavigationBar
+class TestPage extends StatefulWidget {
   const TestPage({super.key});
+
+  @override
+  State<TestPage> createState() => _TestPageState();
+}
+
+class _TestPageState extends State<TestPage> {
+  int _currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -40,12 +47,23 @@ class TestPage extends StatelessWidget {
       body: Center(
         child: BlocBuilder<PetBloc, PetState>(
           builder: (context, state) {
-            return PetWidget(
-              state: state,
-              size: 300,
-            );
+            return PetWidget(state: state, size: 300);
           },
         ),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        backgroundColor: Colors.black,
+        selectedItemColor: const Color(0xFF4FC3F7),
+        unselectedItemColor: const Color(0xFF4FC3F7).withOpacity(0.2),
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.pets), label: '主页'),
+          BottomNavigationBarItem(icon: Icon(Icons.book), label: '自习室'),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: '伴侣'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: '设置'),
+        ],
       ),
     );
   }
