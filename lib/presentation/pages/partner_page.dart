@@ -92,40 +92,39 @@ class _PartnerPageState extends State<PartnerPage> {
       return;
     }
 
-    setState(() {}); // 刷新 debug 显示
+    setState(() {
+      _isPaired = false;
+      _isLoading = false;
+      _pairCode = _firebase.generatePairCode();
+    });
 
-    // 查询关系（可能因数据库规则挂起，加超时）
+    // 后台异步查询已有关系
+    _checkExistingRelation();
+  }
+
+  Future<void> _checkExistingRelation() async {
     try {
       final relation = await _firebase
           .getCurrentRelation()
           .timeout(const Duration(seconds: 10));
-      if (relation != null) {
-        _isPaired = true;
-        _partnerName = '伴侣';
-
+      if (relation != null && mounted) {
         final partner = await _firebase.getPartnerInfo();
-        if (partner != null) {
-          _partnerOnline = partner.isOnline;
+        if (mounted) {
+          setState(() {
+            _isPaired = true;
+            _partnerName = '伴侣';
+            if (partner != null) _partnerOnline = partner.isOnline;
+          });
+          _loadMessageHistory();
+          _firebase.listenNewMessages((message) => _onNewMessage(message));
+          _firebase.listenPartner();
+          _firebase.listenMessages();
+          _firebase.updateOnlineStatus(true);
         }
-
-        await _loadMessageHistory();
-        _firebase.listenNewMessages((message) => _onNewMessage(message));
-        _firebase.listenPartner();
-        _firebase.listenMessages();
-        _firebase.updateOnlineStatus(true);
-      } else {
-        _isPaired = false;
-        _pairCode = _firebase.generatePairCode();
       }
     } catch (e) {
-      // 超时或数据库拒绝访问
-      _firebase.debugStep = 'getRelation: ${e.toString().substring(0, 100)}';
-      _isPaired = false;
-      _pairCode = _firebase.generatePairCode();
+      _firebase.debugStep = 'DB: ${e.toString().substring(0, 80)}';
     }
-
-    _isLoading = false;
-    setState(() {});
   }
 
   Future<void> _createPair() async {
