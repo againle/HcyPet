@@ -107,21 +107,24 @@ class FirebaseService {
   bool get isAuthenticated => _auth?.currentUser != null;
   String? get currentUserId => _currentUserId;
 
-  /// 初始化 Firebase（iOS 需 GoogleService-Info.plist，Android 需 google-services.json）
+  /// 初始化 Firebase
   Future<bool> initialize() async {
     try {
-      _app = await Firebase.initializeApp();
-      _database = FirebaseDatabase.instanceFor(app: _app!);
+      // 优先使用自动初始化的默认 app，不存在则手动初始化
+      try {
+        _app = Firebase.app();
+      } catch (_) {
+        _app = await Firebase.initializeApp();
+      }
+      _database = FirebaseDatabase.instanceFor(
+        app: _app!,
+        databaseURL: 'https://hcypet-default-rtdb.firebaseio.com',
+      );
       _auth = FirebaseAuth.instanceFor(app: _app!);
+      print('✅ Firebase 初始化成功');
       return true;
     } catch (e) {
-      // Web 平台需要显式 FirebaseOptions，真机通过 plist/json 自动配置
-      final msg = e.toString();
-      if (msg.contains('FirebaseOptions cannot be null')) {
-        print('⚠️  Firebase 初始化需要配置文件（当前平台不支持）');
-      } else {
-        print('❌ Firebase 初始化失败: $e');
-      }
+      print('❌ Firebase 初始化失败: $e');
       return false;
     }
   }
