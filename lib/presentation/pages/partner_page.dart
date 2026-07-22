@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../services/firebase_service.dart';
@@ -76,7 +77,7 @@ class _PartnerPageState extends State<PartnerPage> {
     final initialized = await _firebase.initialize();
     if (!initialized) {
       setState(() {
-        _errorMessage = 'Firebase 初始化失败';
+        _errorMessage = 'Firebase 初始化失败\n${_firebase.debugMessage}';
         _isLoading = false;
       });
       return;
@@ -85,35 +86,40 @@ class _PartnerPageState extends State<PartnerPage> {
     final signedIn = await _firebase.signInAnonymously();
     if (!signedIn) {
       setState(() {
-        _errorMessage = '登录失败，请重试';
+        _errorMessage = '登录失败\n${_firebase.debugMessage}';
         _isLoading = false;
       });
       return;
     }
 
-    final relation = await _firebase.getCurrentRelation();
-    if (relation != null) {
-      _isPaired = true;
-      _partnerName = '伴侣';
+    setState(() {}); // 刷新 debug 显示
 
-      final partner = await _firebase.getPartnerInfo();
-      if (partner != null) {
-        _partnerOnline = partner.isOnline;
+    // 查询关系（可能因数据库规则挂起，加超时）
+    try {
+      final relation = await _firebase
+          .getCurrentRelation()
+          .timeout(const Duration(seconds: 10));
+      if (relation != null) {
+        _isPaired = true;
+        _partnerName = '伴侣';
+
+        final partner = await _firebase.getPartnerInfo();
+        if (partner != null) {
+          _partnerOnline = partner.isOnline;
+        }
+
+        await _loadMessageHistory();
+        _firebase.listenNewMessages((message) => _onNewMessage(message));
+        _firebase.listenPartner();
+        _firebase.listenMessages();
+        _firebase.updateOnlineStatus(true);
+      } else {
+        _isPaired = false;
+        _pairCode = _firebase.generatePairCode();
       }
-
-      // 加载消息历史
-      await _loadMessageHistory();
-
-      // 监听新消息
-      _firebase.listenNewMessages((message) {
-        _onNewMessage(message);
-      });
-
-      _firebase.listenPartner();
-      _firebase.listenMessages();
-
-      _firebase.updateOnlineStatus(true);
-    } else {
+    } catch (e) {
+      // 超时或数据库拒绝访问
+      _firebase.debugStep = 'getRelation: ${e.toString().substring(0, 100)}';
       _isPaired = false;
       _pairCode = _firebase.generatePairCode();
     }
@@ -412,9 +418,10 @@ class _PartnerPageState extends State<PartnerPage> {
           const SizedBox(height: 16),
           Text(
             _errorMessage!,
-            style: TextStyle(
-              fontSize: 14,
-              color: const Color(0xFF4FC3F7).withOpacity(0.3),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.white54,
             ),
           ),
           const SizedBox(height: 16),
