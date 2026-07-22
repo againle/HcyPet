@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../bloc/pet_bloc.dart';
 import '../../models/pet_event.dart';
 import '../../models/pet_state.dart';
+import '../../services/debug_config.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -17,6 +18,7 @@ class _SettingsPageState extends State<SettingsPage> {
   int _sleepDelayMinutes = 10;
   int _wakeIntervalMinutes = 30;
   bool _notificationsEnabled = true;
+  bool _debugMode = false;
 
   @override
   void initState() {
@@ -31,6 +33,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _sleepDelayMinutes = prefs.getInt('sleep_delay') ?? 10;
       _wakeIntervalMinutes = prefs.getInt('wake_interval') ?? 30;
       _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
+      _debugMode = prefs.getBool('debug_mode') ?? false;
     });
   }
 
@@ -93,7 +96,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 16),
                   _buildSectionTitle('调试工具'),
                   const SizedBox(height: 8),
-                  _buildDebugButton('🔄 重置宠物状态', () { bloc.add(PetResetEvent()); _showToast('🔄 宠物已重置'); }),
+                  _buildSwitchTile(
+                    title: 'DEBUG 模式',
+                    subtitle: '页面底部显示 Firebase 调试信息',
+                    value: _debugMode,
+                    onChanged: (val) {
+                      setState(() => _debugMode = val);
+                      _saveSetting('debug_mode', val);
+                      DebugConfig.debugEnabled = val;
+                    },
+                  ),
                   _buildDebugButton('💤 进入休眠', () { bloc.add(PetSetActivityEvent(PetActivity.sleeping)); _showToast('💤 宠物已休眠'); }),
                   _buildDebugButton('👀 唤醒宠物', () { bloc.add(PetSetActivityEvent(PetActivity.idle)); _showToast('👀 宠物已唤醒'); }),
                   const SizedBox(height: 16),

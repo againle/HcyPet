@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../services/debug_config.dart';
 import '../../services/firebase_service.dart';
 
 /// 调试信息条 - 在页面底部显示 Firebase 状态
@@ -15,10 +16,14 @@ class _DebugBarState extends State<DebugBar> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: _firebase.changeNotifier,
-      builder: (context, _, __) {
-        return Container(
+    return ValueListenableBuilder<bool>(
+      valueListenable: DebugConfig.notifier,
+      builder: (context, enabled, _) {
+        if (!enabled) return const SizedBox.shrink();
+        return ValueListenableBuilder<int>(
+          valueListenable: _firebase.changeNotifier,
+          builder: (context, _, __) {
+            return Container(
           width: double.infinity,
           padding: const EdgeInsets.all(10),
           color: Colors.black87,
@@ -76,6 +81,8 @@ class _DebugBarState extends State<DebugBar> {
             ],
           ),
         );
+      },
+    );
       },
     );
   }

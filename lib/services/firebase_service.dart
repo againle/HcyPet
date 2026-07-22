@@ -123,19 +123,24 @@ class FirebaseService {
   /// 初始化 Firebase
   Future<bool> initialize() async {
     try {
-      debugStep = 'checking Firebase.app()';
-      try {
-        _app = Firebase.app();
-        debugStep = 'got Firebase.app()';
-      } catch (e1) {
-        debugStep = 'Firebase.app() failed: ${e1.toString().substring(0, 80)}';
-        _app = await Firebase.initializeApp();
-        debugStep = 'Firebase.initializeApp() OK';
-      }
+      debugStep = 'init start';
+      // iOS 26 上自动初始化可能失败，使用显式参数
+      _app = await Firebase.initializeApp(
+        options: const FirebaseOptions(
+          apiKey: 'AIzaSyDecTMjw8KIQ6ybMAttgjhYAcXbaKe2Pxg',
+          appId: '1:308479192079:ios:350e77bd9eac061eec077a',
+          messagingSenderId: '308479192079',
+          projectId: 'hcypet',
+          storageBucket: 'hcypet.firebasestorage.app',
+          databaseURL: 'https://hcypet-default-rtdb.firebaseio.com',
+        ),
+      );
+      debugStep = 'app ok';
       _database = FirebaseDatabase.instanceFor(
         app: _app!,
         databaseURL: 'https://hcypet-default-rtdb.firebaseio.com',
       );
+      debugStep = 'db ok';
       _auth = FirebaseAuth.instanceFor(app: _app!);
       debugStep = 'done';
       _notifyChange();
