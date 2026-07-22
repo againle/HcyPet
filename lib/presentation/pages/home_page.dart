@@ -3,9 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/pet_bloc.dart';
 import '../../models/pet_event.dart';
 import '../../models/pet_state.dart';
+import '../../services/sensor_service.dart';
 import '../pet/pet_widget.dart';
 
-/// 主页（测试 G：无 SensorService、无 VoiceRecorderButton）
+/// 主页（测试 H1：加回 SensorService）
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -14,9 +15,33 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final SensorService _sensorService = SensorService();
+
   @override
   void initState() {
     super.initState();
+    _initSensor();
+  }
+
+  @override
+  void dispose() {
+    _sensorService.stopListening();
+    super.dispose();
+  }
+
+  void _initSensor() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _sensorService.startListening(
+          onShake: () {
+            if (mounted) {
+              context.read<PetBloc>().add(PetShakeEvent());
+            }
+          },
+          onAccelerometerUpdate: (x, y, z) {},
+        );
+      }
+    });
   }
 
   @override
@@ -77,6 +102,31 @@ class _HomePageState extends State<HomePage> {
               _buildStatusIndicators(state),
 
               const SizedBox(height: 20),
+
+              // --- 传感器状态指示 ---
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: _sensorService.isListening
+                          ? const Color(0xFF4FC3F7).withOpacity(0.4)
+                          : Colors.red.withOpacity(0.3),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    '传感器监听中',
+                    style: TextStyle(
+                      fontSize: 8,
+                      color: Color(0xFF4FC3F7),
+                    ),
+                  ),
+                ],
+              ),
 
               const SizedBox(height: 8),
             ],

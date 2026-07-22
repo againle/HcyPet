@@ -18,7 +18,15 @@ class HcyPetApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
+        colorScheme: const ColorScheme.dark().copyWith(
+          primary: const Color(0xFF4FC3F7),
+          secondary: const Color(0xFF4FC3F7),
+        ),
         scaffoldBackgroundColor: Colors.black,
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: Colors.white70, fontSize: 14),
+          bodySmall: TextStyle(color: Colors.white54, fontSize: 12),
+        ),
       ),
       home: BlocProvider(
         create: (_) => PetBloc(),
