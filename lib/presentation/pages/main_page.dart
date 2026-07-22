@@ -37,7 +37,7 @@ class _MainPageState extends State<MainPage> {
         decoration: BoxDecoration(
           border: Border(
             top: BorderSide(
-              color: const Color(0xFF4FC3F7).withOpacity(0.05),
+              color: const Color(0xFF4FC3F7).withValues(alpha: 0.05),
               width: 0.5,
             ),
           ),
@@ -51,7 +51,7 @@ class _MainPageState extends State<MainPage> {
           },
           backgroundColor: Colors.black,
           selectedItemColor: const Color(0xFF4FC3F7),
-          unselectedItemColor: const Color(0xFF4FC3F7).withOpacity(0.2),
+          unselectedItemColor: const Color(0xFF4FC3F7).withValues(alpha: 0.2),
           selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w500),
           unselectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w400),
           type: BottomNavigationBarType.fixed,

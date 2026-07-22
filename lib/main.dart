@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'bloc/pet_bloc.dart';
-import 'presentation/pages/home_page.dart';
+import 'presentation/pages/main_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,7 +53,7 @@ class HcyPetApp extends StatelessWidget {
       ),
       home: BlocProvider(
         create: (_) => PetBloc(),
-        child: const HomePage(),
+        child: const MainPage(),
       ),
     );
   }
