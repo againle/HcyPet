@@ -217,25 +217,24 @@ class StudyHistoryService {
     return result;
   }
 
-  /// 获取某天的专注度曲线（合并所有段的采样）
+  /// 获取某天的专注度曲线（合并所有段的采样，X轴为当天绝对秒数 0-86400）
   Future<List<FocusSample>> getDayFocusCurve(String dateKey) async {
     final sessions = await getDaySessions(dateKey);
     if (sessions.isEmpty) return [];
 
-    // 按开始时间排序
     sessions.sort((a, b) => a.startTime.compareTo(b.startTime));
 
-    // 计算每段的偏移量，合并为全天曲线
     final allSamples = <FocusSample>[];
-    int offsetSeconds = 0;
     for (final session in sessions) {
+      // 学习开始时间的当天绝对秒数（距 0:00 的秒数）
+      final startOfDay = DateTime(session.startTime.year, session.startTime.month, session.startTime.day);
+      final dayOffset = session.startTime.difference(startOfDay).inSeconds;
       for (final sample in session.focusCurve) {
         allSamples.add(FocusSample(
-          elapsedSeconds: offsetSeconds + sample.elapsedSeconds,
+          elapsedSeconds: dayOffset + sample.elapsedSeconds,
           focusScore: sample.focusScore,
         ));
       }
-      offsetSeconds += session.totalSeconds;
     }
     return allSamples;
   }

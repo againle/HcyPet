@@ -295,8 +295,8 @@ class PetBloc extends Bloc<PetEvent, PetState> {
       // 记录入睡时间
       final effectiveSleepAt = state.lastSleepAt ?? now;
 
-      // 睡眠期间精力恢复：每30s恢复2%（快速恢复便于演示，也可调慢）
-      final sleepRecovery = 0.02;
+      // 睡眠期间精力恢复：每30s恢复3%
+      final sleepRecovery = 0.03;
       final newEnergy = (state.energy + sleepRecovery).clamp(0.0, 0.95);
 
       // 早晨自动醒来 (7:00-9:00)
@@ -349,8 +349,16 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     // 状态：清醒中 → 精力向昼夜节律目标平滑逼近
     // ================================================================
 
-    // 1. 检查是否需要自动入睡（23点后 + 精力低 + 不在学习）
+    // 1. 检查是否需要自动入睡
+    //    夜间(23-7)：精力<18%且不在学习时入睡
+    //    白天(7-23)：精力<8%且空闲>2小时时小憩
     if (isNight && state.energy < 0.18 && state.activity != PetActivity.studying) {
+      _goToSleep(emit, now);
+      return;
+    }
+    final isDaytime = hour >= 7 && hour < 23;
+    final idleHours = now.difference(state.lastInteraction).inHours;
+    if (isDaytime && state.energy < 0.08 && idleHours > 2 && state.activity == PetActivity.idle) {
       _goToSleep(emit, now);
       return;
     }
@@ -358,14 +366,25 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     // 2. 昼夜节律目标精力
     final circadianTarget = _computeCircadianTargetEnergy(now);
 
-    // 3. 精力平滑趋向目标（0.5%/tick，学习期间减半避免拉低精力）
+    // 3. 精力平滑趋向目标（带变化上限防止暴跌）
+    //    白天：0.5%/tick，上限 ±0.3%
+    //    晚间(20-23)：1%/tick，上限 ±0.6%（加速趋向入睡）
+    //    低精力(<20%)回升：2%/tick，上限 +1%
+    //    学习期间减半
     final energyGap = circadianTarget - state.energy;
-    final approachRate = state.activity == PetActivity.studying ? 0.0025 : 0.005;
-    final energyDelta = energyGap * approachRate;
-    final newEnergy = (state.energy + energyDelta).clamp(0.0, 1.0);
+    final eveningWindow = hour >= 20 && hour < 23;
+    double baseRate = 0.005;
+    double maxChange = 0.003;
+    if (eveningWindow) { baseRate = 0.01; maxChange = 0.006; }
+    if (state.energy < 0.20 && energyGap > 0) { baseRate = 0.02; maxChange = 0.01; }
+    if (state.activity == PetActivity.studying) { baseRate *= 0.5; maxChange *= 0.5; }
+    final energyDelta = (energyGap * baseRate).clamp(-maxChange, maxChange);
+    var newEnergy = (state.energy + energyDelta).clamp(0.0, 1.0);
+
+    // 白天精力地板：最低 10%，避免长期卡在极低值
+    if (isDaytime && newEnergy < 0.10) newEnergy = 0.10;
 
     // 4. 心情衰减（基础 -0.003/tick，长时间未互动加速）
-    final idleHours = now.difference(state.lastInteraction).inHours;
     double happinessDelta = -0.003;
     if (idleHours > 8) happinessDelta = -0.008;
     // 如果精力很低，心情也跟着下降

@@ -427,7 +427,6 @@ class _StudyPageState extends State<StudyPage> with SingleTickerProviderStateMix
                 child: Text('正向计时（无目标限制）', style: TextStyle(fontSize: 11, color: Color(0x4D4FC3F7)))),
           if (_selectedTabIndex == 1 && isIdle) _buildDurationInput(),
           if (_selectedTabIndex == 2 && isIdle) _buildPomodoroPreset(),
-          if (isRunning && state.focusCurve.length >= 2) _buildMiniFocusCurve(state.focusCurve),
           Text(state.timeDisplay, style: TextStyle(fontSize: 56, fontWeight: FontWeight.w200,
               color: isCompleted ? Colors.green.withOpacity(0.5) : const Color(0xFF4FC3F7), letterSpacing: 6)),
           const SizedBox(height: 4),
@@ -449,12 +448,6 @@ class _StudyPageState extends State<StudyPage> with SingleTickerProviderStateMix
         ]);
       },
     );
-  }
-
-  Widget _buildMiniFocusCurve(List<FocusSample> curve) {
-    return SizedBox(height: 32,
-        child: CustomPaint(size: const Size(double.infinity, 32),
-            painter: _FocusCurvePainter(curve: curve, use24hScale: false)));
   }
 
   Widget _buildDurationInput() {
@@ -772,22 +765,33 @@ class _FocusCurvePainter extends CustomPainter {
 
     final maxSec = use24hScale ? daySeconds : curve.last.elapsedSeconds.toDouble().clamp(1, daySeconds);
 
-    final fillPath = Path();
     final linePath = Path();
     bool first = true;
+    double firstX = 0, firstY = 0, lastX = 0;
     for (final s in curve) {
       final x = (s.elapsedSeconds / maxSec) * size.width;
       final y = size.height - (s.focusScore * size.height * 0.88) - 6;
-      if (first) { fillPath.moveTo(x, size.height); fillPath.lineTo(x, y); linePath.moveTo(x, y); first = false; }
-      else { fillPath.lineTo(x, y); linePath.lineTo(x, y); }
+      if (first) { linePath.moveTo(x, y); firstX = x; firstY = y; first = false; }
+      else { linePath.lineTo(x, y); }
+      lastX = x;
     }
-    fillPath.lineTo((curve.last.elapsedSeconds / maxSec) * size.width, size.height);
-    fillPath.close();
 
-    fillPaint.shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
-        colors: [lineColor.withOpacity(0.18), lineColor.withOpacity(0.0)])
-        .createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    canvas.drawPath(fillPath, fillPaint);
+    // 填充仅在详细图表时绘制
+    if (showGrid) {
+      final fillPath = Path()..moveTo(firstX, firstY);
+      for (int i = 1; i < curve.length; i++) {
+        final s = curve[i];
+        fillPath.lineTo((s.elapsedSeconds / maxSec) * size.width, size.height - (s.focusScore * size.height * 0.88) - 6);
+      }
+      fillPath.lineTo(lastX, size.height);
+      fillPath.lineTo(firstX, size.height);
+      fillPath.close();
+
+      fillPaint.shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+          colors: [lineColor.withOpacity(0.18), lineColor.withOpacity(0.0)])
+          .createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+      canvas.drawPath(fillPath, fillPaint);
+    }
     paint.color = lineColor.withOpacity(0.6);
     canvas.drawPath(linePath, paint);
   }
