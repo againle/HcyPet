@@ -23,10 +23,19 @@ class VoiceService {
     }
   }
 
-  /// 开始录音并返回识别文字（按住说话，松开返回）
-  static Future<VoiceResult> listen() async {
+  /// 开始录音（立即返回，不等待结果）
+  static Future<bool> startListening() async {
     try {
-      final result = await _channel.invokeMethod<Map>('startListening');
+      return await _channel.invokeMethod<bool>('startListening') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 停止录音并返回识别文字
+  static Future<VoiceResult> stop() async {
+    try {
+      final result = await _channel.invokeMethod<Map>('stopListening');
       if (result != null) {
         return VoiceResult(
           text: result['text'] as String? ?? '',
@@ -38,13 +47,6 @@ class VoiceService {
       return VoiceResult(text: '', success: false, error: e.toString());
     }
     return const VoiceResult(text: '', success: false, error: '未知错误');
-  }
-
-  /// 停止录音
-  static Future<void> stop() async {
-    try {
-      await _channel.invokeMethod('stopListening');
-    } catch (_) {}
   }
 
   /// 请求语音权限

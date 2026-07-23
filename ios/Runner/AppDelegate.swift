@@ -206,6 +206,8 @@ class VisionDetector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var voiceResult: FlutterResult?
+    private var accumulatedText = ""
 
     override func application(
         _ application: UIApplication,
@@ -281,15 +283,15 @@ class VisionDetector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         case "startListening":
             startVoiceListening(result: result)
         case "stopListening":
-            stopVoiceListening()
-            result(nil)
+            stopVoiceListening(result: result)
         default:
             result(FlutterMethodNotImplemented)
         }
     }
 
     private func startVoiceListening(result: @escaping FlutterResult) {
-        stopVoiceListening()
+        stopVoiceListening(result: nil)
+        accumulatedText = ""
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.record, mode: .measurement, options: .duckOthers)
@@ -303,7 +305,7 @@ class VisionDetector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             result(["text": "", "success": false, "error": "无法创建请求"])
             return
         }
-        req.shouldReportPartialResults = false
+        req.shouldReportPartialResults = true
         let input = audioEngine.inputNode
         input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buf, _ in req.append(buf) }
         audioEngine.prepare()
@@ -311,20 +313,32 @@ class VisionDetector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             result(["text": "", "success": false, "error": "录音启动失败"])
             return
         }
+        voiceResult = result
         recognitionTask = speechRecognizer?.recognitionTask(with: req) { [weak self] sr, err in
             guard let self = self else { return }
-            if let e = err { self.stopVoiceListening(); result(["text": "", "success": false, "error": e.localizedDescription]); return }
-            if let f = sr, f.isFinal { self.stopVoiceListening(); result(["text": f.bestTranscription.formattedString, "success": true]) }
+            if let sr = sr { self.accumulatedText = sr.bestTranscription.formattedString }
+            if let e = err {
+                self.stopVoiceListening(result: nil)
+                self.voiceResult?(["text": self.accumulatedText, "success": self.accumulatedText.isEmpty ? false : true, "error": e.localizedDescription])
+                self.voiceResult = nil
+            }
         }
     }
 
-    private func stopVoiceListening() {
+    private func stopVoiceListening(result: FlutterResult?) {
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         recognitionRequest?.endAudio()
         recognitionRequest = nil
         recognitionTask?.cancel()
         recognitionTask = nil
+        if let r = result {
+            r(["text": accumulatedText, "success": !accumulatedText.isEmpty])
+        }
+        if let vr = voiceResult {
+            vr(["text": accumulatedText, "success": !accumulatedText.isEmpty])
+            voiceResult = nil
+        }
     }
 }
 

@@ -1,159 +1,31 @@
-import 'dart:math';
-import 'vision_service.dart';
-
-/// ============================================================
-/// V3 视觉滤波 — 深度平滑 + 专注优先 + 抗抖动
-/// ============================================================
-///
-/// 设计理念：专注是常态，分心是例外。
-/// 用户专注时不看屏幕 = 高专注度，而非"检测不到"。
-///
+﻿import "dart:math";
+import "vision_service.dart";
 
 class VisionFilter {
-  double _smoothFocus = 0.5;
-  double _smoothCalm = 0.5;
-  double _smoothFocused = 0.5;
-  double _smoothFrustrated = 0.0;
-  double _smoothBored = 0.0;
-  double _smoothHappy = 0.0;
-  double _smoothAnxious = 0.0;
-  double _smoothTired = 0.0;
+  double _sf = 0.6, _sc = 0.6, _sfc = 0.6, _sfr = 0.0, _sb = 0.0, _sh = 0.0, _sa = 0.0, _st = 0.0;
+  static const _a = 0.10;
+  double _inertia = 0.5; int _hf = 0; int _ff = 0;
+  static const _ft = 0.55; static const _ffc = 180;
+  DateTime? _ss; bool _init = false; late VisionResult _last;
 
-  static const _alpha = 0.12; // 深度平滑（越低越稳）
-
-  // 专注惯性：一旦建立高专注，不容易掉
-  double _focusInertia = 0.5; // 0=无惯性, 1=完全锁定
-  int _highFocusFrames = 0;
-
-  // 烦躁需持续确认
-  int _frustratedFrames = 0;
-  static const _frustratedThreshold = 0.50; // 更高阈值
-  static const _frustratedConfirmFrames = 120; // 需持续 ~2 秒（60fps）
-
-  DateTime? _studyStart;
-  bool _initialized = false;
-  late VisionResult _last;
-
-  VisionResult process(
-    VisionResult raw, {
-    bool isTouching = false,
-    bool isStudying = false,
-  }) {
-    if (!_initialized) {
-      _smoothFocus = raw.focusScore;
-      _smoothCalm = raw.emotion.calm;
-      _smoothFocused = raw.emotion.focused;
-      _smoothFrustrated = raw.emotion.frustrated;
-      _smoothBored = raw.emotion.bored;
-      _smoothHappy = raw.emotion.happy;
-      _smoothAnxious = raw.emotion.anxious;
-      _smoothTired = raw.emotion.tired;
-      _initialized = true;
-      _last = raw;
-      return raw;
-    }
-
-    // 抗抖动：变化 < 0.03 忽略
-    final fxDelta = (raw.focusScore - _smoothFocus).abs();
-    if (fxDelta < 0.03 && raw.emotion.dominantIntensity < 0.5) return _last;
-
-    // EMA 深度平滑
-    _smoothFocus = _ema(_smoothFocus, raw.focusScore);
-    _smoothCalm = _ema(_smoothCalm, raw.emotion.calm);
-    _smoothFocused = _ema(_smoothFocused, raw.emotion.focused);
-    _smoothFrustrated = _ema(_smoothFrustrated, raw.emotion.frustrated);
-    _smoothBored = _ema(_smoothBored, raw.emotion.bored);
-    _smoothHappy = _ema(_smoothHappy, raw.emotion.happy);
-    _smoothAnxious = _ema(_smoothAnxious, raw.emotion.anxious);
-    _smoothTired = _ema(_smoothTired, raw.emotion.tired);
-
-    // ── 专注惯性 ──
-    if (_smoothFocus > 0.65) {
-      _highFocusFrames = min(_highFocusFrames + 1, 300);
-    } else if (_smoothFocus < 0.45) {
-      _highFocusFrames = max(_highFocusFrames - 2, 0);
-    }
-    _focusInertia = (_highFocusFrames / 150).clamp(0.0, 1.0);
-
-    var effectiveFocus = _smoothFocus;
-    if (_focusInertia > 0.5) {
-      // 惯性加持：高专注时即使短暂掉分也保持高位
-      effectiveFocus = _smoothFocus + (_focusInertia * 0.2).clamp(0.0, 1.0 - _smoothFocus);
-    }
-
-    // ── 专注时不看屏幕 = 默认高专注 ──
-    if (isStudying && raw.scene == StudyScene.noFace) {
-      effectiveFocus = max(effectiveFocus, 0.60); // 学习中无脸 = 低头看书，默认专注
-    }
-
-    // ── 烦躁需持续确认 ──
-    var dominantEmotion = EmotionSpectrum(
-      calm: _smoothCalm, focused: _smoothFocused,
-      frustrated: _smoothFrustrated, bored: _smoothBored,
-      happy: _smoothHappy, anxious: _smoothAnxious, tired: _smoothTired,
-    ).dominantEmotion;
-
-    if (_smoothFrustrated > _frustratedThreshold && dominantEmotion == 'frustrated') {
-      _frustratedFrames++;
-    } else {
-      _frustratedFrames = max(_frustratedFrames - 3, 0);
-    }
-
-    // 未达确认帧数 → 不理
-    if (_frustratedFrames < _frustratedConfirmFrames && dominantEmotion == 'frustrated') {
-      dominantEmotion = 'focused';
-    }
-
-    // 触摸中皱眉 → 果断忽略
-    if (dominantEmotion == 'frustrated' && isTouching && _focusInertia > 0.3) {
-      dominantEmotion = 'focused';
-    }
-
-    // ── 学习防疲劳 ──
-    if (isStudying) {
-      _studyStart ??= DateTime.now();
-      final mins = DateTime.now().difference(_studyStart!).inMinutes;
-      if (mins > 50) effectiveFocus = (effectiveFocus * 1.15).clamp(0.0, 1.0);
-    } else {
-      _studyStart = null;
-    }
-
-    _last = VisionResult(
-      scene: raw.scene,
-      focusScore: effectiveFocus.clamp(0.0, 1.0),
-      emotion: EmotionSpectrum(calm: _smoothCalm, focused: _smoothFocused,
-          frustrated: _frustratedFrames > _frustratedConfirmFrames ? _smoothFrustrated : _smoothFrustrated * 0.3,
-          bored: _smoothBored, happy: _smoothHappy, anxious: _smoothAnxious, tired: _smoothTired),
-      isStudying: raw.isStudying,
-      timestamp: DateTime.now(),
-    );
+  VisionResult process(VisionResult r, {bool isTouching = false, bool isStudying = false}) {
+    if (!_init) { _sf = r.focusScore; _sc = r.emotion.calm; _sfc = r.emotion.focused; _init = true; _last = r; return r; }
+    if ((r.focusScore - _sf).abs() < 0.03 && r.emotion.dominantIntensity < 0.5) return _last;
+    _sf = _e(_sf, r.focusScore); _sc = _e(_sc, r.emotion.calm); _sfc = _e(_sfc, r.emotion.focused);
+    _sfr = _e(_sfr, r.emotion.frustrated); _sb = _e(_sb, r.emotion.bored);
+    _sh = _e(_sh, r.emotion.happy); _sa = _e(_sa, r.emotion.anxious); _st = _e(_st, r.emotion.tired);
+    if (_sf > 0.65) { _hf = min(_hf + 1, 300); } else if (_sf < 0.45) { _hf = max(_hf - 2, 0); }
+    _inertia = (_hf / 150).clamp(0.0, 1.0);
+    var ef = _sf; if (_inertia > 0.5) ef = _sf + (_inertia * 0.25).clamp(0.0, 1 - _sf);
+    if (isStudying && r.scene == StudyScene.noFace) ef = max(ef, 0.60);
+    var de = EmotionSpectrum(calm: _sc, focused: _sfc, frustrated: _sfr, bored: _sb, happy: _sh, anxious: _sa, tired: _st).dominantEmotion;
+    if (_sfr > _ft && de == "frustrated") { _ff++; } else { _ff = max(_ff - 3, 0); }
+    if (_ff < _ffc && de == "frustrated") de = "focused";
+    if (de == "frustrated" && isTouching && _inertia > 0.3) de = "focused";
+    if (isStudying) { _ss ??= DateTime.now(); if (DateTime.now().difference(_ss!).inMinutes > 50) ef = (ef * 1.15).clamp(0.0, 1.0); } else { _ss = null; }
+    _last = VisionResult(scene: r.scene, focusScore: ef.clamp(0.0, 1.0), emotion: EmotionSpectrum(calm: _sc, focused: _sfc, frustrated: _ff > _ffc ? _sfr : _sfr * 0.2, bored: _sb, happy: _sh, anxious: _sa, tired: _st), isStudying: r.isStudying, timestamp: DateTime.now());
     return _last;
   }
-
-  double _ema(double prev, double curr) => _alpha * curr + (1 - _alpha) * prev;
-  void reset() { _initialized = false; _highFocusFrames = 0; _frustratedFrames = 0; _studyStart = null; }
-}
-    }
-
-    _lastCleanResult = VisionResult(
-      scene: raw.scene,
-      focusScore: effectiveFocus,
-      emotion: spectrum,
-      isStudying: raw.isStudying,
-      timestamp: DateTime.now(),
-    );
-    return _lastCleanResult;
-  }
-
-  late VisionResult _lastCleanResult;
-
-  double _ema(double prev, double curr) => _alpha * curr + (1 - _alpha) * prev;
-
-  /// 重置滤波状态
-  void reset() {
-    _initialized = false;
-    _firstFrameTime = null;
-    _frustratedStart = null;
-    _studyStartTime = null;
-  }
+  double _e(double p, double c) => _a * c + (1 - _a) * p;
+  void reset() { _init = false; _hf = 0; _ff = 0; _ss = null; }
 }

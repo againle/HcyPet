@@ -31,12 +31,12 @@ class _TalkButtonState extends State<TalkButton> {
           title: Row(children: [
             Expanded(child: Text('和宠物说说话', style: TextStyle(color: kPrimaryColor.withValues(alpha: 0.8), fontSize: 14, fontWeight: kFontThin, letterSpacing: 1.5))),
             GestureDetector(
-              onTapDown: (_) async { setDlg(() => _recording = true);
-                final r = await VoiceService.listen();
+              onTapDown: (_) async { setDlg(() => _recording = true); VoiceService.startListening(); },
+              onTapUp: (_) async {
                 setDlg(() => _recording = false);
+                final r = await VoiceService.stop();
                 if (r.success && r.text.isNotEmpty) { controller.text = r.text; controller.selection = TextSelection.collapsed(offset: r.text.length); }
               },
-              onTapUp: (_) => VoiceService.stop(),
               child: Container(
                 width: 36, height: 36,
                 decoration: BoxDecoration(color: _recording ? Colors.red.withOpacity(0.2) : kPrimaryColor.withOpacity(0.05), shape: BoxShape.circle),
