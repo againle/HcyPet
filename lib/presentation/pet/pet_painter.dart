@@ -6,16 +6,12 @@ import "mochi_physics.dart";
 class PetPainter extends CustomPainter {
   final MochiExpression expression;
   final double size;
-  final bool isSleeping;
-  final bool showHearts;
-  final bool showZzz;
-  final bool surpriseMouth;
+  final bool isSleeping, showHearts, showZzz, surpriseMouth, allowArc, forceArc;
   final Color petColor;
   final double squashStretch;
-  final bool allowArc; // 仅稳定时允许弧形眼（避免过渡期闪现）
   static const _dc = PetStrokeSpec.color;
 
-  const PetPainter({required this.expression, this.size = 200, this.isSleeping = false, this.showHearts = false, this.showZzz = false, this.surpriseMouth = false, this.petColor = _dc, this.squashStretch = 0.0, this.allowArc = true});
+  const PetPainter({required this.expression, this.size = 200, this.isSleeping = false, this.showHearts = false, this.showZzz = false, this.surpriseMouth = false, this.petColor = _dc, this.squashStretch = 0.0, this.allowArc = true, this.forceArc = false});
 
   double get _op => isSleeping ? 0.3 : 1.0;
 
@@ -23,8 +19,8 @@ class PetPainter extends CustomPainter {
   double get _arcStrength {
     if (!allowArc) return 0.0;
     final e = expression.eyelidOpen;
-    if (e <= 0.45 || e >= 0.62) return 0.0;
-    return (1.0 - (e - 0.535).abs() / 0.085).clamp(0.0, 1.0);
+    if (e <= 0.45 || e >= 0.65) return 0.0;
+    return (1.0 - (e - 0.55).abs() / 0.10).clamp(0.0, 1.0); // 峰值精确 0.55
   }
 
   @override
@@ -52,12 +48,16 @@ class PetPainter extends CustomPainter {
 
   void _eyes(Canvas c, Offset ct, double sc) {
     if (expression.eyelidOpen <= 0.02) { _closed(c, ct, sc); return; }
-    final as = _arcStrength; // 0=纯圆角矩形, 1=纯弧形
-    // 圆角矩形 fade out，弧形 fade in（交叉淡入淡出而非叠加）
+    if (forceArc) {
+      // 笑脸模式：只用弧形，眨眼即弧线压扁→弹起，永不出方块
+      _arcEyes(c, ct, sc, 1.0);
+      return;
+    }
+    final as = _arcStrength;
     final roundOpacity = 1.0 - as;
     final arcOpacity = as;
-    if (roundOpacity > 0.01) _roundEyes(c, ct, sc, roundOpacity);
-    if (arcOpacity > 0.01) _arcEyes(c, ct, sc, arcOpacity);
+    if (roundOpacity > 0.005) _roundEyes(c, ct, sc, roundOpacity);
+    if (arcOpacity > 0.005) _arcEyes(c, ct, sc, arcOpacity);
   }
 
   void _roundEyes(Canvas c, Offset ct, double sc, [double opacity = 1.0]) {
@@ -71,8 +71,9 @@ class PetPainter extends CustomPainter {
   }
 
   void _arcEyes(Canvas c, Offset ct, double sc, [double opacity = 1.0]) {
-    final o = expression.eyelidOpen.clamp(0.15, 0.55);
-    final ah = (1 - o) * 42 * sc; final span = 40 * sc; final sp = 36 * sc;
+    final o = expression.eyelidOpen.clamp(0.03, 0.55);
+    final ah = o * 35 * sc; // 闭眼→0px, 开心→19px, 丝滑缩放
+    final span = 40 * sc; final sp = 36 * sc;
     final sx = expression.eyeShiftX * 12 * sc;
     final p = Paint()..color = petColor.withOpacity(_op * opacity)..style = PaintingStyle.stroke..strokeWidth = 8 * sc..strokeCap = StrokeCap.round;
     c.drawPath(Path()..moveTo(ct.dx - sp - span / 2 + sx, ct.dy + 3 * sc)..quadraticBezierTo(ct.dx - sp + sx, ct.dy - ah, ct.dx - sp + span / 2 + sx, ct.dy + 3 * sc), p);
@@ -107,5 +108,5 @@ class PetPainter extends CustomPainter {
   void _h(Canvas c, Offset o, double s, Paint p) { c.drawPath(Path()..moveTo(o.dx, o.dy + s * 0.4)..cubicTo(o.dx - s * 0.3, o.dy - s * 0.2, o.dx - s * 0.6, o.dy - s * 0.4, o.dx - s * 0.3, o.dy - s * 0.7)..cubicTo(o.dx, o.dy - s * 0.9, o.dx + s * 0.3, o.dy - s * 0.7, o.dx + s * 0.6, o.dy - s * 0.4)..cubicTo(o.dx + s * 0.6, o.dy - s * 0.2, o.dx + s * 0.3, o.dy + s * 0.2, o.dx, o.dy + s * 0.4)..close(), p); }
 
   @override
-  bool shouldRepaint(covariant PetPainter o) => true;
+  bool shouldRepaint(PetPainter o) => true;
 }
