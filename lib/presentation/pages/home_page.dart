@@ -24,9 +24,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final SensorService _sensorService = SensorService();
-
-  // ── PetWidget 引用（用于触发物理特效） ──
   final GlobalKey<_PetWidgetWrapperState> _petKey = GlobalKey();
+  final List<DateTime> _shakeTimes = [];
+  static const _shakeWindow = Duration(seconds: 2);
+  static const _minShakes = 3;
 
   @override
   void initState() {
@@ -46,10 +47,18 @@ class _HomePageState extends State<HomePage> {
         _sensorService.startListening(
           onShake: () {
             if (mounted) {
+              final now = DateTime.now();
+              _shakeTimes.removeWhere((t) => now.difference(t) > _shakeWindow);
+              _shakeTimes.add(now);
               HapticFeedback.heavyImpact();
               context.read<PetBloc>().add(PetShakeEvent());
-              // 触发惊吓物理效果
               _petKey.currentState?.triggerStartle();
+              // 抖动越久晕越久：次数越多duration越长
+              if (_shakeTimes.length >= _minShakes) {
+                final extraMs = (_shakeTimes.length - _minShakes) * 300;
+                _petKey.currentState?.triggerDazed(Duration(milliseconds: 1500 + extraMs));
+                _shakeTimes.clear();
+              }
             }
           },
           onAccelerometerUpdate: (x, y, z) {},
@@ -478,6 +487,7 @@ class _PetWidgetWrapperState extends State<_PetWidgetWrapper> {
 
   void triggerHappyBounce() => _innerKey.currentState?.triggerHappyBounce();
   void triggerStartle() => _innerKey.currentState?.triggerStartle();
+  void triggerDazed(Duration d) => _innerKey.currentState?.triggerDazed(d);
   void applySquash(double amount) => _innerKey.currentState?.applySquash(amount);
   void releaseSquash() => _innerKey.currentState?.releaseSquash();
   void setPinchScale(double s) => _innerKey.currentState?.setPinchScale(s);

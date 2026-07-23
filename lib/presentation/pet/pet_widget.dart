@@ -64,7 +64,7 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
     _idl.setEnergy(widget.state.energy);
     _idl.setIsCalm(widget.state.mood == PetMood.calm);
     _idl.update(dt);
-    _spiralAngle += dt * 4; // 螺旋持续旋转
+    _spiralAngle -= dt * 4; // 向中心旋转
     if (mounted) setState(() {});
   }
 
@@ -75,16 +75,12 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
   };
 
   void triggerHappyBounce() { _blush.setTarget(0.45, initialVelocity: 0.3); _eye.setTarget(0.5, initialVelocity: 0.3); HapticFeedback.lightImpact(); }
-  void triggerStartle() { _eye.setTarget(1.0, initialVelocity: 0.5); _dazedTrigger(); HapticFeedback.heavyImpact(); }
+  void triggerStartle() { _eye.setTarget(1.0, initialVelocity: 0.5); HapticFeedback.heavyImpact(); }
+  void triggerDazed(Duration duration) { _dazed = true; Future.delayed(duration, () { _dazed = false; if (mounted) setState(() {}); }); if (mounted) setState(() {}); }
   void applySquash(double a) => _sq.setTarget(a.clamp(-1.0, 1.0));
-  void releaseSquash() { _sq.setTarget(0.0); _dazedTrigger(); HapticFeedback.mediumImpact(); }
+  void releaseSquash() { _sq.setTarget(0.0); _dazed = true; Future.delayed(const Duration(milliseconds: 1200), () { _dazed = false; if (mounted) setState(() {}); }); HapticFeedback.mediumImpact(); if (mounted) setState(() {}); }
 
   bool _dazed = false;
-  void _dazedTrigger() {
-    _dazed = true;
-    Future.delayed(const Duration(milliseconds: 1500), () { _dazed = false; if (mounted) setState(() {}); });
-    if (mounted) setState(() {});
-  }
   void setPinchScale(double s) { _ps = s.clamp(0.6, 1.4); if (mounted) setState(() {}); }
   void resetPinchScale() { _ps = 1.0; if (mounted) setState(() {}); }
 

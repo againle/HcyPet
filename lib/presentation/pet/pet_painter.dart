@@ -85,22 +85,21 @@ class PetPainter extends CustomPainter {
   /// 旋转螺旋眼（棒棒糖旋涡）
   void _spiralEyes(Canvas c, Offset ct, double sc) {
     final sp = 68 * sc;
-    for (final dx in [-sp, sp]) {
+    for (int i = 0; i < 2; i++) {
+      final dx = [-sp, sp][i];
       final cx = ct.dx + dx; final cy = ct.dy;
       final p = Paint()..color = petColor.withOpacity(_op)..style = PaintingStyle.stroke..strokeWidth = 3.5 * sc..strokeCap = StrokeCap.round;
-      // 阿基米德螺旋：r = a + b*θ，从中心向外画
       final path = Path();
       final maxR = 32 * sc;
-      const turns = 2.5; // 2.5 圈
-      const steps = 80;
-      final a = 2 * sc; // 起始半径
+      const turns = 2.5; const steps = 80;
+      final a = 2 * sc;
       final b = (maxR - a) / (turns * 2 * math.pi);
       var first = true;
-      for (int i = 0; i <= steps; i++) {
-        final t = i / steps; // 0→1
-        final theta = spiralAngle + t * turns * 2 * math.pi;
+      for (int j = 0; j <= steps; j++) {
+        final t = j / steps;
+        final theta = spiralAngle - t * turns * 2 * math.pi;
         final r = a + b * (t * turns * 2 * math.pi);
-        final x = cx + r * math.cos(theta);
+        final x = cx + (i == 0 ? -1 : 1) * r * math.cos(theta); // 左眼镜像
         final y = cy + r * math.sin(theta);
         if (first) { path.moveTo(x, y); first = false; } else { path.lineTo(x, y); }
       }
