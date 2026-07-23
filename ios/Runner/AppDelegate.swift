@@ -41,7 +41,7 @@ import Vision
         visionDetector = VisionDetector()
 
         // V3 新回调: (scene, focusScore, emotionJson, isStudying)
-        visionDetector?.onResult = { [weak self] scene, focusScore, emotionJson, isStudying in
+        visionDetector?.onResult = { [weak self] (scene: String, focusScore: Double, emotionJson: String, isStudying: Bool) in
             guard let self = self,
                   let controller = self.window?.rootViewController as? FlutterViewController else { return }
             let channel = FlutterMethodChannel(name: self.visionChannel, binaryMessenger: controller.binaryMessenger)
@@ -53,7 +53,7 @@ import Vision
             ])
         }
 
-        visionDetector?.onError = { [weak self] error in
+        visionDetector?.onError = { [weak self] (error: String) in
             guard let self = self,
                   let controller = self.window?.rootViewController as? FlutterViewController else { return }
             let channel = FlutterMethodChannel(name: self.visionChannel, binaryMessenger: controller.binaryMessenger)

@@ -351,15 +351,19 @@ class VisionDetector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
                      + postureScore * 0.10
 
         // 场景衰减
-        let sceneMultiplier: Double = switch scene {
-        case .reading:    1.0
-        case .computer:   0.95
-        case .phone:      0.3
-        case .distracted: 0.15
-        case .noFace:     0.0
-        }
+        let sceneMultiplier: Double = sceneMultiplierFor(scene)
 
         return min(1.0, max(0.0, rawScore * sceneMultiplier))
+    }
+
+    private func sceneMultiplierFor(_ scene: StudyScene) -> Double {
+        switch scene {
+        case .reading:    return 1.0
+        case .computer:   return 0.95
+        case .phone:      return 0.3
+        case .distracted: return 0.15
+        case .noFace:     return 0.0
+        }
     }
 
     /// 头部姿态稳定性：低yaw/pitch方差 + 低roll绝对值
