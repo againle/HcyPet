@@ -28,109 +28,97 @@
 
 | 模块 | 说明 |
 |------|------|
-| 🏠 **主页** | 宠物展示（CustomPainter 6 种情绪 + 睡眠动画）、抚摸/喂食/对话/摇晃互动 |
-| 📚 **自习室** | 3 种计时模式（正向/倒计时/番茄钟）、专注评分、宠物陪伴学习 |
-| 💕 **伴侣** | Firebase 匿名登录、配对码匹配、实时消息、宠物状态同步 |
-| ⚙️ **设置** | 休眠/唤醒参数、通知开关、DEBUG 模式、重置宠物 |
+| 主页 | 宠物展示（CustomPainter 6 种情绪 + 睡眠动画）、抚摸/喂食/对话/摇晃互动、昼夜节律精力 |
+| 自习室 | 3 种计时模式 + Apple Vision 专注度检测 + 热力图日历（月/年）+ 24h 专注度折线图 |
+| 伴侣 | Firebase 匿名登录、配对码匹配、实时消息、宠物状态同步 |
+| 设置 | 休眠/唤醒参数、通知开关、DEBUG 模式、重置宠物 |
 
 ### 宠物状态系统
 
 ```
 6 种情绪: happy · calm · surprised · sad · sleepy · missing
-6 种活动: idle · watching · playing · studying · sleeping · thinking
-3 维数值: happiness(0-1) · energy(0-1) · intimacy(0-1)
+8 种活动: idle · watching · playing · studying · sleeping · thinking · groggy · celebrating
+5 维数值: happiness(0-1) · energy(0-1) · intimacy(0-1) · fullness(0-1) · boredom(0-1)
 ```
 
-- 每 30 秒自然衰减（happiness -0.005, energy -0.008）
-- 精力 < 0.2 → sleepy，快乐 < 0.3 → sad，> 4h 无互动 → missing
+- **昼夜节律精力**：双峰余弦曲线建模（晨峰 90% → 午饭后低谷 50% → 午后回升 80% → 晚间 < 20%），每 30s 平滑趋近
+- **起床逻辑**：睡眠质量 = 时长因子 × (1 - 打断惩罚)，起床精力 = 90% × 质量，情绪联动（精力 < 70% → 情绪 40%）
+- **睡眠系统**：夜间 23-7 点自动入睡（+3%/tick 恢复），白天精力 < 8% + 空闲 > 2h 自动小憩
+- **白天精力地板**：7-23 点精力不低于 10%
 - 状态持久化到 SharedPreferences
 
 ---
 
-## 视觉追踪模块（当前状态）
+## 视觉追踪模块（V3 — 已实现）
 
-### ⚠️ 当前为占位模式（Placeholder）
+### Apple Vision 原生检测（iOS MethodChannel）
 
-视觉追踪经历了 3 次尝试，均在 iOS 26 上失败：
+视觉追踪已完成原生 Swift 实现，通过 MethodChannel (`com.hcypet.vision`) 与 Flutter 通信。所有代码嵌入 `ios/Runner/AppDelegate.swift`，无第三方依赖。
 
-| 尝试 | 方案 | 失败原因 |
-|------|------|---------|
-| 1 | `google_mlkit_face_detection` | 静态 MediaPipe framework 冲突，linker error |
-| 2 | `vision_ai` package | 同上，依赖冲突 |
-| 3 | 原生 Apple Vision (Swift MethodChannel) | `FlutterImplicitEngineDelegate` 编译错误 |
+### 场景识别（5 种）
 
-### 当前架构（占位）
+| 场景 | 判定条件 |
+|:---|:---|
+| 阅读/写字 | 头微低(pitch 0.1-0.35) + 头部稳定(yaw方差<0.04) |
+| 电脑 | 头平视(\|pitch\|<0.15) + 水平扫视(yaw方差<0.06) |
+| 手机 | 头低垂(pitch>0.35) + 人脸偏大(离得近) |
+| 分心 | 频繁转头(yaw方差>0.08) 或 人脸频繁离开(<60%) |
+| 无人脸 | 画面中未检测到人脸 |
+
+### 多因子专注度评分（0-1）
 
 ```
-lib/
-├── services/vision_service.dart     ← 占位实现，initialize() 仅返回 true
-├── bloc/vision_bloc.dart            ← VisionBloc（完整事件系统，但无实际检测）
-└── models/                          ← EmotionResult 数据模型（支持 7 种情绪）
+focusScore = headStability(0.30) + eyeStability(0.25) + facePresence(0.20) + motionCalmness(0.15) + postureScore(0.10)
+           × sceneMultiplier（阅读=1.0, 电脑=0.95, 手机=0.3, 分心=0.15）
 ```
 
-### EmotionResult 模型（V2 预留）
+### 连续情绪谱（7 维，0-1）
 
-```dart
-class EmotionResult {
-  String emotion;        // happy | sad | angry | fearful | disgusted | surprised | neutral
-  double confidence;     // 置信度 0-1
-  bool isAttention;      // 是否专注（面向屏幕）
-  double attentionScore; // 专注评分 0-100
+| 维度 | 检测方法 |
+|:---|:---|
+| calm 平静 | 眉毛不紧绷 + 嘴不抿 + 头部稳定 |
+| focused 专注 | 即专注度评分 |
+| frustrated 烦躁 | 眉毛微下压(< -0.05) + 抿嘴 + 微抖（敏感阈值） |
+| bored 无聊 | 眼部持续偏低 + 歪头 + 面部静止 |
+| happy 开心 | 嘴角上扬 + 眼部微眯(笑眼) |
+| anxious 焦虑 | 眉毛上扬(微紧张) + 眨眼频率高 + 眼部偏大 |
+| tired 疲惫 | 眼部趋势下降 + 眨眼增加 + 头部下倾 |
 
-  String get comfortMessage { ... }  // 内置安慰消息
-}
-```
+### 时序分析（30 帧滑动窗口）
 
-### V2 视觉追踪方案建议
-
-> ⚠️ 下个 Session 务必先调研目标版本的可用方案
-
-| 方案 | 优点 | 风险 |
-|------|------|-----|
-| **Apple Vision** (原生 Swift) | 零额外依赖，iOS 原生 | 需正确配置 MethodChannel |
-| **Google ML Kit** (bare) | 跨平台 | iOS 26 兼容性需验证 |
-| **ARKit 面部追踪** | 精确头部姿态 | 仅 Face ID 设备有 TrueDepth |
-| **Core Image** 人脸检测 | 轻量内置 | 仅检测位置，无情绪 |
+- EMA 基线更新（眼部张开度 / 面部大小）
+- 眨眼频率追踪（10 秒窗口）
+- 眉毛变化 / 抿嘴历史
+- 情绪趋势（前半段 vs 后半段均值差）
 
 ---
 
-## 走神检测逻辑
+## 自习室
 
-### 当前实现：模拟（无摄像头）
+### 计时模式
 
-```
-位置: lib/bloc/study_bloc.dart → _onTick()
-触发: 计时器每秒 tick
-专注评分: 60-100 随机波动（模拟）
-走神阈值: 专注分 < 70
-```
+- **正向计时**：无限计时，进度条按小时缩放
+- **倒计时**：自定义分钟数，到 0 自动完成
+- **番茄钟**：预设 25/45/50/90 分钟，完成自动切换阶段
 
-```dart
-// 每 10 秒评估
-_flucutation = (DateTime.now().millisecond % 5) - 2; // ±2
-newScore = (focusScore + fluctuation).clamp(60, 100);
-isFocused = newScore > 70;
-```
-
-### V2 真实走神检测设计
+### 专注度检测（实时视觉）
 
 ```
-摄像头 → VisionService (Apple Vision / ML Kit)
-  ↓ 每 1-3 秒一帧
-EmotionResult {
-  attentionScore: 头部姿态 + 视线方向
-  isAttention: 超阈值
-}
+摄像头 → VisionDetector (Apple Vision) → VisionBloc → StudyBloc._onFocusData()
+  ↓ 每 15 秒采样一次
+FocusSample { elapsedSeconds, focusScore }
   ↓
-StudyFocusUpdateEvent → StudyBloc._onFocusUpdate()
-
-走神判定:
-  · 视线离开屏幕 > 3 秒 → 走神
-  · 头部大幅偏转 → 走神
-  · 连续非专注 → 专注分 -5/次
-  · 恢复专注 → 专注分 +2/次
-  · 专注分 < 70 → 宠物提示 "专心学习哦~ 📚"
+StudyBloc 综合专注评分（avgCurve）
 ```
+
+### 学习历史 + 热力图日历
+
+- **日历面板**：顶部摘要条（今日 X 分 · 连续 X 天），点击下拉展开
+  - **月视图**：当月热力图 + 图例，左右箭头切换月份，点击年份切换年视图
+  - **年视图**：12 块迷你月热力图网格，点击任意月进入月视图
+- **日详情**：点击热力图格子 → 底部弹窗显示 24 小时专注度折线图（蓝色 `#42A5F5`，渐变填充）
+- **持久化**：`SharedPreferences` 存储每段学习的完整专注度采样曲线
+- **学习结束**：宠物自动切换 celebrating + happy 状态，显示鼓励 thought
 
 ---
 
@@ -140,16 +128,19 @@ StudyFocusUpdateEvent → StudyBloc._onFocusUpdate()
 
 ```
 main.dart
-  └─ BlocProvider<PetBloc>           ← 全局宠物状态（14 个事件）
+  └─ BlocProvider<PetBloc>           ← 全局宠物状态（昼夜节律 + 睡眠 + 起床）
       └─ MainPage（BottomNavigationBar 4 tab）
           ├─ HomePage                ← SensorService（加速度计 + 摇晃）
-          │   ├─ PetWidget           ← AnimationController 呼吸动画
+          │   ├─ PetWidget           ← AnimationController 呼吸动画 + 空闲行为
           │   │   └─ CustomPaint → PetPainter（6 情绪 + 睡眠绘制）
           │   ├─ TalkButton          ← 文字弹窗输入（替代语音）
           │   └─ 互动按钮
-          ├─ StudyPage
-          │   ├─ StudyBloc           ← 计时器 + 专注评分
-          │   └─ VisionBloc          ← 视觉追踪（占位）
+          ├─ StudyPage               ← V3 完整自习室
+          │   ├─ StudyBloc           ← 计时器 + 专注度采样 + 学习历史
+          │   ├─ VisionBloc          ← Apple Vision 情绪检测 + 趋势分析
+          │   ├─ HeatmapCalendar     ← 热力图日历（月/年视图）
+          │   ├─ _DayFocusChart      ← 24h 专注度折线图
+          │   └─ 学习结束宠物庆祝
           ├─ PartnerPage
           │   └─ FirebaseService     ← 单例：init/auth/relation/message
           └─ SettingsPage
@@ -164,6 +155,12 @@ main.dart
                               PetPainter 重绘
                               SharedPreferences 持久化
                               Firebase DB 同步（伴侣模式）
+
+摄像头 → VisionDetector (Swift) → MethodChannel → VisionBloc
+                                    ↓
+                              StudyBloc（专注度采样 + 趋势）
+                              EmotionEngine（情绪干预）
+                              PetBloc（宠物反应）
 ```
 
 ---
@@ -179,15 +176,19 @@ HcyPet/
 │   │   ├── study_bloc.dart               # StudyBloc: 3 模式计时 + 模拟专注评分
 │   │   └── vision_bloc.dart              # VisionBloc: 占位（事件系统完整）
 │   ├── models/
-│   │   ├── pet_state.dart                # PetState: 6 情绪 × 6 活动 × 3 数值
-│   │   ├── pet_event.dart                # 14 事件类
-│   │   └── study_state.dart              # StudyState: 3 计时模式
+│   │   ├── pet_state.dart                # PetState: 6 情绪 × 8 活动 × 5 数值 + lastSleepAt
+│   │   ├── pet_event.dart                # 事件类（含 VisionResult）
+│   │   ├── study_state.dart              # StudyState: 3 计时模式 + focusCurve + completedSession
+│   │   ├── user_action.dart              # UserAction + PetReaction（含 VisionResult）
+│   │   └── growth_state.dart            # GrowthState: 等级/经验/每日上限
 │   ├── services/
-│   │   ├── firebase_service.dart         # Firebase 全部操作 + ValueNotifier 调试
-│   │   ├── sensor_service.dart           # accelerometer + shake（sensors_plus）
-│   │   ├── vision_service.dart           # 占位
-│   │   ├── notification_service.dart     # 本地推送
-│   │   └── debug_config.dart             # 全局 DEBUG 开关（ValueNotifier<bool>）
+│   │   ├── emotion_engine.dart          # AI 情感推理引擎（规则 + 视觉情绪干预）
+│   │   ├── firebase_service.dart        # Firebase 全部操作 + ValueNotifier 调试
+│   │   ├── sensor_service.dart          # accelerometer + shake（sensors_plus）
+│   │   ├── vision_service.dart          # V3: VisionResult/EmotionSpectrum/StudyScene
+│   │   ├── study_history_service.dart   # V3: 学习记录 + 专注度曲线存储
+│   │   ├── notification_service.dart    # 本地推送
+│   │   └── debug_config.dart            # 全局 DEBUG 开关（ValueNotifier<bool>）
 │   └── presentation/
 │       ├── pages/
 │       │   ├── main_page.dart            # 4 tab 底部导航
@@ -199,14 +200,15 @@ HcyPet/
 │       │   ├── pet_painter.dart          # CustomPainter: 7 种绘制模式
 │       │   └── pet_widget.dart           # AnimationController 呼吸动画包装
 │       └── widgets/
-│           ├── talk_button.dart          # 文字输入弹窗按钮
-│           ├── voice_recorder_button.dart # 旧语音按钮（未使用）
-│           └── debug_bar.dart            # DEBUG 面板：Firebase 实时状态
+│           ├── heatmap_calendar.dart      # V3: 热力图日历组件（月视图）
+│           ├── achievement_card.dart      # V3: 成就闪卡（备用）
+│           ├── talk_button.dart           # 文字输入弹窗按钮
+│           └── debug_bar.dart             # DEBUG 面板：Firebase 实时状态
 ├── ios/
 │   ├── Runner/
-│   │   ├── Info.plist                    # Bundle + 权限（FirebaseAutoConfigureDisabled 已移除）
-│   │   ├── GoogleService-Info.plist      # Firebase 配置（含 DATABASE_URL）
-│   │   ├── AppDelegate.swift             # 标准 FlutterAppDelegate
+│   │   ├── Info.plist                    # 权限声明（含 NSMicrophoneUsageDescription）
+│   │   ├── GoogleService-Info.plist      # Firebase 配置
+│   │   ├── AppDelegate.swift             # V3: VisionDetector 嵌入（场景识别+情绪谱+专注度）
 │   │   └── GeneratedPluginRegistrant.m   # 已移除 SpeechToTextPlugin
 │   └── Runner.xcodeproj/
 ├── codemagic.yaml                        # CI/CD: flutter build + ditto IPA
@@ -232,6 +234,7 @@ HcyPet/
 | 通知 | flutter_local_notifications | ^17.0.0 | 本地推送 |
 | 计时 | stop_watch_timer | ^1.0.0 | 辅助 |
 | UI | flutter_svg | ^2.0.9 | SVG |
+| | table_calendar | ^3.1.2 | 日历组件 |
 | | cupertino_icons | ^1.0.8 | iOS 图标 |
 
 ### ❌ 已移除
@@ -327,24 +330,26 @@ App 在 iOS 26+ 通过 SideStore 侧载后立即闪退，极简版（MaterialApp
 
 ---
 
-## 已知问题 & V2 规划
+## 已知问题 & 版本演进
 
-### 🟡 当前待办
+### 已完成（2026-07-23）
 
-| 问题 | 优先级 | 状态 |
-|------|--------|------|
-| Firebase 匿名登录控制台启用 | P0 | 等待用户操作 |
-| 伴侣页数据库首次查询挂起 | P1 | 已绕过，加 10s 超时 |
-| withOpacity 弃用 | P3 | 部分已迁移 withValues |
-| 传感器指示器 UI | P3 | 简化 |
+- [x] VisionDetector V3 — Apple Vision 原生（场景识别+情绪谱+专注度）
+- [x] 昼夜节律精力系统（双峰余弦曲线 + 起床逻辑 + 睡眠质量）
+- [x] 自习室热力图日历（月/年视图 + 24h 专注度折线图）
+- [x] 学习历史存储 + 专注度采样曲线持久化
+- [x] 学习结束宠物庆祝表现
+- [x] 视觉情绪干预（7 维情绪谱 → 宠物反应）
+- [x] 精力管理优化（白天地板 10% + 日间小憩 + 变化上限）
+- [x] iOS 26 侧载崩溃修复
 
-### 🔵 V2 功能规划
+### 待开发
 
-| 功能 | 依赖 | 难度 |
-|------|------|------|
-| 真实视觉追踪 | Apple Vision / ML Kit | ⭐⭐⭐⭐⭐ |
-| 走神检测真实数据 | 视觉追踪 | ⭐⭐⭐ |
-| 语音输入恢复 | 调研 iOS 26 兼容方案 | ⭐⭐⭐ |
+- [ ] 物理引擎重构（BlendShape + 微眼动 + 分频呼吸 + 情绪粒子）
+- [ ] 手势交互矩阵（长按/连击/滑动/摇晃 + Haptic Feedback）
+- [ ] DeepSeek API 集成 + 长期记忆系统
+- [ ] 原生语音通道（SFSpeechRecognizer MethodChannel）
+- [ ] 伴侣模式完善
 | 历史数据图表 | fl_chart | ⭐⭐ |
 | 成就系统 | Firebase DB | ⭐⭐ |
 | 桌面 Widget | iOS WidgetKit | ⭐⭐⭐ |
