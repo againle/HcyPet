@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../services/study_history_service.dart';
 
 /// 计时模式
 enum TimerMode {
@@ -18,16 +19,22 @@ enum TimerStatus {
 /// 番茄钟阶段
 enum PomodoroPhase { work, rest }
 
-/// 自习室状态
+/// 自习室状态 V3
 class StudyState extends Equatable {
   final TimerMode mode;
   final TimerStatus status;
-  final int elapsedSeconds;      // 已用秒数
-  final int targetSeconds;       // 目标秒数（倒计时/番茄钟用）
-  final int focusScore;          // 专注评分 0-100
-  final bool isFocused;          // 是否专注
-  final int pomodoroCount;       // 完成的番茄数
-  final PomodoroPhase pomodoroPhase; // 当前番茄阶段
+  final int elapsedSeconds;
+  final int targetSeconds;
+  final int focusScore;          // 当前专注评分 0-100
+  final bool isFocused;
+  final int pomodoroCount;
+  final PomodoroPhase pomodoroPhase;
+
+  // V3: 专注度曲线（实时采样）
+  final List<FocusSample> focusCurve;
+
+  // V3: 刚刚完成的学习记录（用于成就闪卡）
+  final StudySession? completedSession;
 
   const StudyState({
     this.mode = TimerMode.forward,
@@ -38,6 +45,8 @@ class StudyState extends Equatable {
     this.isFocused = true,
     this.pomodoroCount = 0,
     this.pomodoroPhase = PomodoroPhase.work,
+    this.focusCurve = const [],
+    this.completedSession,
   });
 
   StudyState copyWith({
@@ -49,6 +58,8 @@ class StudyState extends Equatable {
     bool? isFocused,
     int? pomodoroCount,
     PomodoroPhase? pomodoroPhase,
+    List<FocusSample>? focusCurve,
+    StudySession? completedSession,
   }) {
     return StudyState(
       mode: mode ?? this.mode,
@@ -59,6 +70,8 @@ class StudyState extends Equatable {
       isFocused: isFocused ?? this.isFocused,
       pomodoroCount: pomodoroCount ?? this.pomodoroCount,
       pomodoroPhase: pomodoroPhase ?? this.pomodoroPhase,
+      focusCurve: focusCurve ?? this.focusCurve,
+      completedSession: completedSession ?? this.completedSession,
     );
   }
 

@@ -358,9 +358,10 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     // 2. 昼夜节律目标精力
     final circadianTarget = _computeCircadianTargetEnergy(now);
 
-    // 3. 精力平滑趋向目标（每次 tick 向目标移动 3% 差距）
+    // 3. 精力平滑趋向目标（0.5%/tick，学习期间减半避免拉低精力）
     final energyGap = circadianTarget - state.energy;
-    final energyDelta = energyGap * 0.03 + (energyGap > 0 ? 0.002 : -0.002);
+    final approachRate = state.activity == PetActivity.studying ? 0.0025 : 0.005;
+    final energyDelta = energyGap * approachRate;
     final newEnergy = (state.energy + energyDelta).clamp(0.0, 1.0);
 
     // 4. 心情衰减（基础 -0.003/tick，长时间未互动加速）

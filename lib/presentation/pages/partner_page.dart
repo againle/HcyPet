@@ -123,7 +123,7 @@ class _PartnerPageState extends State<PartnerPage> {
         }
       }
     } catch (e) {
-      _firebase.debugStep = 'DB: ${e.toString().substring(0, 80)}';
+      _firebase.debugStep = 'DB: ${e.toString().length > 80 ? e.toString().substring(0, 80) : e.toString()}';
     }
   }
 
