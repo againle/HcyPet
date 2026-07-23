@@ -8,6 +8,8 @@ import '../models/pet_event.dart';
 import '../models/user_action.dart';
 import '../models/growth_state.dart';
 import '../services/emotion_engine.dart';
+import '../services/deepseek_service.dart';
+import '../services/memory_bank.dart';
 
 /// 宠物 Bloc — V3 昼夜节律精力 + 情绪联动 + AI 引擎
 class PetBloc extends Bloc<PetEvent, PetState> {
@@ -60,6 +62,14 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     Timer(const Duration(seconds: 5), () {
       if (!isClosed) add(ClearThoughtEvent());
     });
+  }
+
+  static String _timeLabel(DateTime t) {
+    final h = t.hour;
+    if (h < 6) return '深夜'; if (h < 9) return '早晨';
+    if (h < 12) return '上午'; if (h < 14) return '中午';
+    if (h < 18) return '下午'; if (h < 22) return '晚上';
+    return '深夜';
   }
 
   // ============ 辅助：应用引擎输出 ============
@@ -137,7 +147,6 @@ class PetBloc extends Bloc<PetEvent, PetState> {
   }
 
   Future<void> _onTalk(PetTalkEvent event, Emitter<PetState> emit) async {
-    // 睡觉时说话也会唤醒
     if (!state.isAwake) {
       final groggyState = state.copyWith(
         activity: PetActivity.groggy, mood: PetMood.sleepy,
@@ -153,9 +162,29 @@ class PetBloc extends Bloc<PetEvent, PetState> {
       return;
     }
 
-    final action = UserAction.talk(event.message ?? '');
+    final message = event.message ?? '';
+    final action = UserAction.talk(message);
     final reaction = _engine.process(action, currentState: state);
-    final newState = _applyReaction(reaction);
+
+    // 尝试 DeepSeek AI 回复
+    String? aiReply;
+    try {
+      final memories = await MemoryBank.getRecent(5);
+      final result = await DeepSeekService().chat(message, memoryContext: memories);
+      if (!result.isError) aiReply = result.text;
+    } catch (_) {}
+
+    // 保存记忆
+    await MemoryBank.addMemory(MemoryEntry(
+      userSaid: message,
+      mood: reaction.targetMood.name,
+      timeLabel: _timeLabel(DateTime.now()),
+      timestamp: DateTime.now(),
+    ));
+
+    final thought = aiReply ?? reaction.systemHint;
+    final newState = _applyReaction(reaction).copyWith(thought: thought);
+    _scheduleThoughtClear();
     emit(newState);
     await _saveState(newState);
 

@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import AVFoundation
 import Vision
+import Speech
 
 // MARK: - 帧数据快照
 
@@ -200,6 +201,12 @@ class VisionDetector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     private let visionChannel = "com.hcypet.vision"
     private var visionDetector: VisionDetector?
 
+    // V3 语音属性
+    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
+    private let audioEngine = AVAudioEngine()
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -219,6 +226,12 @@ class VisionDetector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             case "isAvailable": result(true)
             default: result(FlutterMethodNotImplemented)
             }
+        }
+
+        // V3 语音录制
+        let voiceChannel = FlutterMethodChannel(name: "com.hcypet.voice", binaryMessenger: controller.binaryMessenger)
+        voiceChannel.setMethodCallHandler { [weak self] (call, result) in
+            self?.handleVoice(call, result: result)
         }
 
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
@@ -250,6 +263,65 @@ class VisionDetector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
 
     private func stopVision(result: @escaping FlutterResult) {
         visionDetector?.stop(); visionDetector = nil; result(true)
+    }
+
+    // MARK: - Voice Methods
+
+    private func handleVoice(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        switch call.method {
+        case "isSpeechAvailable":
+            result(SFSpeechRecognizer.authorizationStatus() == .authorized)
+        case "requestPermission":
+            SFSpeechRecognizer.requestAuthorization { s in
+                DispatchQueue.main.async { result(s == .authorized) }
+            }
+        case "startListening":
+            startVoiceListening(result: result)
+        case "stopListening":
+            stopVoiceListening()
+            result(nil)
+        default:
+            result(FlutterMethodNotImplemented)
+        }
+    }
+
+    private func startVoiceListening(result: @escaping FlutterResult) {
+        stopVoiceListening()
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.record, mode: .measurement, options: .duckOthers)
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {
+            result(["text": "", "success": false, "error": "音频会话失败"])
+            return
+        }
+        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+        guard let req = recognitionRequest else {
+            result(["text": "", "success": false, "error": "无法创建请求"])
+            return
+        }
+        req.shouldReportPartialResults = false
+        let input = audioEngine.inputNode
+        input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buf, _ in req.append(buf) }
+        audioEngine.prepare()
+        do { try audioEngine.start() } catch {
+            result(["text": "", "success": false, "error": "录音启动失败"])
+            return
+        }
+        recognitionTask = speechRecognizer?.recognitionTask(with: req) { [weak self] sr, err in
+            guard let self = self else { return }
+            if let e = err { self.stopVoiceListening(); result(["text": "", "success": false, "error": e.localizedDescription]); return }
+            if let f = sr, f.isFinal { self.stopVoiceListening(); result(["text": f.bestTranscription.formattedString, "success": true]) }
+        }
+    }
+
+    private func stopVoiceListening() {
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+        recognitionTask?.cancel()
+        recognitionTask = nil
     }
 }
 

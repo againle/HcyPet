@@ -32,6 +32,9 @@
     <key>NSMicrophoneUsageDescription</key>
     <string>HcyPet 需要使用麦克风接收你的语音指令和消息</string>
     
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>HcyPet 需要语音识别来理解你说的话</string>
+    
     <key>NSMotionUsageDescription</key>
     <string>HcyPet 需要通过加速度和摇晃信号与宠物互动</string>
     

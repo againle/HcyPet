@@ -4,10 +4,13 @@ import 'bloc/pet_bloc.dart';
 import 'presentation/pages/main_page.dart';
 import 'presentation/widgets/debug_bar.dart';
 import 'services/debug_config.dart';
+import 'services/notification_service.dart';
+import 'services/wish_system.dart';
 import 'theme/design_constants.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  NotificationService().initialize().then((_) => WishSystem.start());
   runApp(const HcyPetApp());
 }
 

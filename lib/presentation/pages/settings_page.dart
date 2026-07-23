@@ -5,6 +5,7 @@ import '../../bloc/pet_bloc.dart';
 import '../../models/pet_event.dart';
 import '../../models/pet_state.dart';
 import '../../services/debug_config.dart';
+import '../../services/api_config.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -19,6 +20,8 @@ class _SettingsPageState extends State<SettingsPage> {
   int _wakeIntervalMinutes = 30;
   bool _notificationsEnabled = true;
   bool _debugMode = false;
+  String _apiKey = '';
+  bool _apiKeyVisible = false;
 
   @override
   void initState() {
@@ -34,6 +37,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _wakeIntervalMinutes = prefs.getInt('wake_interval') ?? 30;
       _notificationsEnabled = prefs.getBool('notifications_enabled') ?? true;
       _debugMode = prefs.getBool('debug_mode') ?? false;
+      _apiKey = prefs.getString('api_key_deepseek') ?? '';
     });
   }
 
@@ -95,6 +99,10 @@ class _SettingsPageState extends State<SettingsPage> {
                     value: _notificationsEnabled,
                     onChanged: (val) { setState(() => _notificationsEnabled = val); _saveSetting('notifications_enabled', val); },
                   ),
+                  const SizedBox(height: 16),
+                  _buildSectionTitle('AI 对话'),
+                  const SizedBox(height: 8),
+                  _buildApiKeyTile(),
                   const SizedBox(height: 16),
                   _buildSectionTitle('调试工具'),
                   const SizedBox(height: 8),
@@ -165,6 +173,37 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildApiKeyTile() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.02), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white.withOpacity(0.03), width: 0.5)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('DeepSeek API Key', style: TextStyle(fontSize: 12, color: const Color(0xFF4FC3F7).withOpacity(0.3))),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: TextField(
+            obscureText: !_apiKeyVisible,
+            controller: TextEditingController(text: _apiKey),
+            onChanged: (v) { _apiKey = v; _saveSetting('api_key_deepseek', v); ApiConfig.setDeepseekKey(v); },
+            style: TextStyle(fontSize: 12, color: const Color(0xFF4FC3F7).withOpacity(0.4)),
+            decoration: InputDecoration(
+              hintText: _apiKey.isEmpty ? 'sk-...' : '已保存 (点按修改)',
+              hintStyle: TextStyle(fontSize: 11, color: const Color(0xFF4FC3F7).withOpacity(0.12)),
+              filled: true, fillColor: Colors.white.withOpacity(0.03),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: const Color(0xFF4FC3F7).withOpacity(0.05))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: const Color(0xFF4FC3F7).withOpacity(0.05))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: BorderSide(color: const Color(0xFF4FC3F7).withOpacity(0.2))),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), isDense: true,
+            ),
+          )),
+          const SizedBox(width: 4),
+          IconButton(icon: Icon(_apiKeyVisible ? Icons.visibility_off : Icons.visibility, size: 16, color: const Color(0xFF4FC3F7).withOpacity(0.25)), onPressed: () => setState(() => _apiKeyVisible = !_apiKeyVisible), padding: EdgeInsets.zero, constraints: const BoxConstraints()),
+        ]),
+      ]),
     );
   }
 
