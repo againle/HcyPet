@@ -9,6 +9,7 @@ import '../../services/sensor_service.dart';
 import '../../theme/design_constants.dart';
 import '../pet/gesture_engine.dart';
 import '../pet/pet_widget.dart';
+import '../pet/pet_painter.dart'; // EyeFlavor
 import '../widgets/talk_button.dart';
 
 /// ============================================================
@@ -56,7 +57,11 @@ class _HomePageState extends State<HomePage> {
               // 抖动越久晕越久：次数越多duration越长
               if (_shakeTimes.length >= _minShakes) {
                 final extraMs = (_shakeTimes.length - _minShakes) * 300;
-                _petKey.currentState?.triggerDazed(Duration(milliseconds: 1500 + extraMs));
+                // V4: lazy 性格 → 晕眩时间减半
+                final moodBias = context.read<PetBloc>().aiMoodBias;
+                final factor = moodBias == 'lazy' ? 0.5 : 1.0;
+                final dazeMs = ((1500 + extraMs) * factor).toInt();
+                _petKey.currentState?.triggerDazed(Duration(milliseconds: dazeMs));
                 _shakeTimes.clear();
               }
             }
@@ -73,8 +78,9 @@ class _HomePageState extends State<HomePage> {
 
   void _onLongPressStart() {
     HapticFeedback.mediumImpact();
-    context.read<PetBloc>().add(PetPetEvent());
-    _petKey.currentState?.triggerHappyBounce();
+    // V4: 长按 = Cheeky → 平静
+    _petKey.currentState?.triggerCheeky();
+    context.read<PetBloc>().add(PetSetMoodEvent(PetMood.calm));
   }
 
   void _onLongPressEnd() {
@@ -90,31 +96,46 @@ class _HomePageState extends State<HomePage> {
 
   void _onDoubleTap() {
     HapticFeedback.lightImpact();
-    context.read<PetBloc>().add(PetPetEvent());
-    _petKey.currentState?.triggerHappyBounce();
+    // V4: 双击 = 轻微挤压(预期动画) → Wink → 平静
+    _petKey.currentState?.applySquash(0.3);
+    Future.delayed(const Duration(milliseconds: 120), () {
+      _petKey.currentState?.applySquash(0.0);
+      _petKey.currentState?.triggerWink();
+      context.read<PetBloc>().add(PetSetMoodEvent(PetMood.calm));
+    });
   }
+
+  bool _isSwiping = false;
 
   void _onPanUpdate(Offset delta) {
     // 橡皮拉伸：根据位移量挤压/拉伸眼睛
     final screenW = MediaQuery.of(context).size.width;
     final stretch = (delta.dx / screenW).clamp(-1.0, 1.0);
     _petKey.currentState?.applySquash(stretch);
-    if (delta.distance > 3) HapticFeedback.selectionClick();
+    if (delta.distance > 3) {
+      HapticFeedback.selectionClick();
+      _isSwiping = true;
+    }
   }
 
   void _onPanEnd(Offset velocity) {
-    // 松手回弹 → 晕眩
-    _petKey.currentState?.releaseSquash();
+    // 松手回弹（不再晕眩）
+    _petKey.currentState?.applySquash(0.0);
+    // V4: 滑动 = 抚摸，纯开心
+    if (_isSwiping) {
+      _isSwiping = false;
+      context.read<PetBloc>().add(PetPetEvent());
+      _petKey.currentState?.triggerHappyBounce();
+    }
   }
 
   void _onDragThrow(Offset velocity) {
     HapticFeedback.mediumImpact();
-    // 拖拽扔出 → 挤压形变
+    // 拖拽扔出 → 挤压形变（不再晕眩）
     final strength = velocity.distance.clamp(0.0, 2000.0) / 2000.0;
     _petKey.currentState?.applySquash(strength);
-    // 0.3 秒后释放
     Future.delayed(const Duration(milliseconds: 300), () {
-      _petKey.currentState?.releaseSquash();
+      _petKey.currentState?.applySquash(0.0);
     });
     context.read<PetBloc>().add(PetShakeEvent());
   }
@@ -160,6 +181,7 @@ class _HomePageState extends State<HomePage> {
                     child: _PetWidgetWrapper(
                       key: _petKey,
                       state: state,
+                      aiBoost: bloc.aiBoost,
                     ),
                   ),
                 ),
@@ -475,8 +497,9 @@ class _HomePageState extends State<HomePage> {
 
 class _PetWidgetWrapper extends StatefulWidget {
   final PetState state;
+  final double aiBoost;
 
-  const _PetWidgetWrapper({super.key, required this.state});
+  const _PetWidgetWrapper({super.key, required this.state, this.aiBoost = 1.0});
 
   @override
   State<_PetWidgetWrapper> createState() => _PetWidgetWrapperState();
@@ -492,12 +515,16 @@ class _PetWidgetWrapperState extends State<_PetWidgetWrapper> {
   void releaseSquash() => _innerKey.currentState?.releaseSquash();
   void setPinchScale(double s) => _innerKey.currentState?.setPinchScale(s);
   void resetPinchScale() => _innerKey.currentState?.resetPinchScale();
+  /// V4: 触发 wink / cheeky 临时眼型
+  void triggerWink() => _innerKey.currentState?.triggerWink();
+  void triggerCheeky() => _innerKey.currentState?.triggerCheeky();
 
   @override
   Widget build(BuildContext context) {
     return PetWidget(
       key: _innerKey,
       state: widget.state,
+      aiBoost: widget.aiBoost,
       size: PetSize.container,
     );
   }

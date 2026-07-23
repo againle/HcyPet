@@ -3,6 +3,9 @@ import "package:flutter/material.dart";
 import "../../theme/design_constants.dart";
 import "mochi_physics.dart";
 
+/// V4: 眼型临时修饰枚举
+enum EyeFlavor { normal, wink, cheeky }
+
 class PetPainter extends CustomPainter {
   final MochiExpression expression;
   final double size;
@@ -10,9 +13,11 @@ class PetPainter extends CustomPainter {
   final Color petColor;
   final double squashStretch;
   final double spiralAngle;
+  /// V4: 临时眼型修饰（wink / cheeky / normal）
+  final EyeFlavor eyeFlavor;
   static const _dc = PetStrokeSpec.color;
 
-  const PetPainter({required this.expression, this.size = 200, this.isSleeping = false, this.showHearts = false, this.showZzz = false, this.dazed = false, this.petColor = _dc, this.squashStretch = 0.0, this.allowArc = true, this.forceArc = false, this.happyMood = false, this.spiralAngle = 0.0, this.backFacing = false});
+  const PetPainter({required this.expression, this.size = 200, this.isSleeping = false, this.showHearts = false, this.showZzz = false, this.dazed = false, this.petColor = _dc, this.squashStretch = 0.0, this.allowArc = true, this.forceArc = false, this.happyMood = false, this.spiralAngle = 0.0, this.backFacing = false, this.eyeFlavor = EyeFlavor.normal});
 
   double get _op => isSleeping ? 0.3 : 1.0;
 
@@ -49,6 +54,10 @@ class PetPainter extends CustomPainter {
     if (expression.eyelidOpen <= 0.02) { _closed(c, ct, sc); return; }
     if (backFacing) { _backEyes(c, ct, sc); return; }
     if (dazed) { _spiralEyes(c, ct, sc); return; }
+    // V4: wink 优先（左眼闭，右眼正常）
+    if (eyeFlavor == EyeFlavor.wink) { _winkEyes(c, ct, sc); return; }
+    // V4: cheeky 眼（一侧 < 形）
+    if (eyeFlavor == EyeFlavor.cheeky) { _cheekyEyes(c, ct, sc); return; }
     if (forceArc) { _arcEyes(c, ct, sc, 1.0); return; }
     final as = _arcStrength;
     final roundOpacity = 1.0 - as;
@@ -106,6 +115,75 @@ class PetPainter extends CustomPainter {
       }
       c.drawPath(path, p);
     }
+  }
+
+  // ============================================================
+  // V4: Wink 眼 — 右眼画 < 形内凹弧，左眼缩小一圈
+  //     用固定比例，不依赖 expression 过渡值，避免闪烁
+  // ============================================================
+  void _winkEyes(Canvas c, Offset ct, double sc) {
+    final sp = 68 * sc;
+    final ew = 56 * sc;
+    // 固定圆角（不受 eyelidOpen 影响）
+    const fixedO = 1.0;
+    final r = 28 * sc * fixedO;
+    final fillP = Paint()..color = petColor.withOpacity(_op)..style = PaintingStyle.fill;
+    // 左眼：缩小到 70%
+    final leftScale = 0.7;
+    final leftW = ew * leftScale;
+    final leftH = 140 * sc * leftScale;
+    final leftR = r * leftScale;
+    c.drawRRect(RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(ct.dx - sp, ct.dy), width: leftW, height: leftH),
+      Radius.circular(leftR),
+    ), fillP);
+    // 右眼：内凹弧 < 形，固定高度
+    final arcH = 70 * sc; // 固定 50% 正常眼高
+    final strokeP = Paint()
+      ..color = petColor.withOpacity(_op)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8 * sc
+      ..strokeCap = StrokeCap.round;
+    final cx = ct.dx + sp;
+    final arcW = ew * 0.8;
+    c.drawPath(
+      Path()
+        ..moveTo(cx - arcW / 2, ct.dy + arcH * 0.3)
+        ..quadraticBezierTo(cx, ct.dy - arcH * 0.6, cx + arcW / 2, ct.dy + arcH * 0.3),
+      strokeP,
+    );
+  }
+
+  // ============================================================
+  // V4: Cheeky 眼 — 左侧画内凹弧，右侧正常圆眼（固定比例）
+  // ============================================================
+  void _cheekyEyes(Canvas c, Offset ct, double sc) {
+    final sp = 68 * sc;
+    final ew = 56 * sc;
+    const fixedO = 1.0;
+    final r = 28 * sc * fixedO;
+    final fillP = Paint()..color = petColor.withOpacity(_op)..style = PaintingStyle.fill;
+    // 右眼：正常圆眼
+    final eh = 140 * sc;
+    c.drawRRect(RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset(ct.dx + sp, ct.dy), width: ew, height: eh),
+      Radius.circular(r),
+    ), fillP);
+    // 左眼：内凹弧 < 形
+    final arcH = 70 * sc;
+    final strokeP = Paint()
+      ..color = petColor.withOpacity(_op)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 8 * sc
+      ..strokeCap = StrokeCap.round;
+    final cx = ct.dx - sp;
+    final arcW = ew * 0.8;
+    c.drawPath(
+      Path()
+        ..moveTo(cx - arcW / 2, ct.dy + arcH * 0.3)
+        ..quadraticBezierTo(cx, ct.dy - arcH * 0.6, cx + arcW / 2, ct.dy + arcH * 0.3),
+      strokeP,
+    );
   }
 
   /// 后脑勺生气：小眼远距 + 手绘生气符号

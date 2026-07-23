@@ -119,6 +119,13 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildDebugButton('进入休眠', () { bloc.add(PetSetActivityEvent(PetActivity.sleeping)); _showToast('宠物已休眠'); }),
                   _buildDebugButton('唤醒宠物', () { bloc.add(PetSetActivityEvent(PetActivity.idle)); _showToast('宠物已唤醒'); }),
                   const SizedBox(height: 16),
+                  _buildSectionTitle('AI 韵律'),
+                  const SizedBox(height: 8),
+                  _buildDebugButton('让它静一静（重置韵律）', () {
+                    bloc.resetAITuner();
+                    _showToast('韵律已重置为默认值');
+                  }),
+                  const SizedBox(height: 16),
                   _buildSectionTitle('应用信息'),
                   const SizedBox(height: 8),
                   _buildInfoTile('版本', '1.0.0'),

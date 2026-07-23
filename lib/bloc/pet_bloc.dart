@@ -10,8 +10,10 @@ import '../models/growth_state.dart';
 import '../services/emotion_engine.dart';
 import '../services/deepseek_service.dart';
 import '../services/memory_bank.dart';
+import '../services/ai_tuner.dart';
+import '../presentation/pet/pet_painter.dart'; // EyeFlavor
 
-/// 宠物 Bloc — V3 昼夜节律精力 + 情绪联动 + AI 引擎
+/// 宠物 Bloc — V4 双核驱动：规则引擎 + AI 韵律调节器
 class PetBloc extends Bloc<PetEvent, PetState> {
   Timer? _decayTimer;
   static const _decayInterval = Duration(seconds: 30);
@@ -19,6 +21,15 @@ class PetBloc extends Bloc<PetEvent, PetState> {
 
   /// AI 情感推理引擎
   final EmotionEngine _engine = EmotionEngine();
+
+  /// V4: AI 韵律调节器
+  final AITuner _aiTuner = AITuner();
+
+  /// V4: AI 韵律参数（每 10 分钟由 AI 刷新）
+  double _aiBoost = 1.0;        // 空闲动作频率倍率
+  EyeFlavor _aiEyeFlavor = EyeFlavor.normal; // 推荐眼型
+  double _aiProactive = 0.0;    // 主动求关注概率
+  String _aiMoodBias = 'playful'; // 性格倾向
 
   /// 个人养成数据（本地，不与伴侣同步）
   GrowthState _growth = GrowthState.initial();
@@ -34,6 +45,9 @@ class PetBloc extends Bloc<PetEvent, PetState> {
 
   /// 起床时间（今天是否已计算过起床精力）
   DateTime? _todayWakeDate;
+
+  /// 今日累计互动次数（供 AI 韵律采集）
+  int _todayInteractionCount = 0;
 
   PetBloc() : super(PetState.initial()) {
     on<PetInitEvent>(_onInit);
@@ -54,7 +68,55 @@ class PetBloc extends Bloc<PetEvent, PetState> {
 
     add(PetInitEvent());
     _startDecayTimer();
+    _initAITuner();
   }
+
+  // ============================================================
+  // V4: AI 韵律调节器初始化
+  // ============================================================
+
+  void _initAITuner() {
+    // 注入上下文采集回调
+    _aiTuner.onCollectContext = () {
+      final now = DateTime.now();
+      final hour = now.hour;
+      final timeLabel = hour < 6 ? '深夜' : hour < 9 ? '早晨' : hour < 12 ? '上午'
+          : hour < 14 ? '中午' : hour < 18 ? '下午' : hour < 22 ? '晚上' : '深夜';
+      return '情绪=${_happinessLabel(state.happiness)}，精力=${(state.energy * 100).toInt()}%，'
+          '亲密度=${(state.intimacy * 100).toInt()}%，今日互动=$_todayInteractionCount 次，'
+          '当前时段=$timeLabel。';
+    };
+
+    // 注入结果回调
+    _aiTuner.onTuneUpdated = (result) {
+      _aiBoost = result.actionBoost;
+      _aiEyeFlavor = result.eyeFlavor;
+      _aiProactive = result.proactiveChance;
+      _aiMoodBias = result.moodBias;
+    };
+
+    _aiTuner.start();
+  }
+
+  String _happinessLabel(double h) {
+    if (h > 0.8) return '很开心';
+    if (h > 0.5) return '开心';
+    if (h > 0.3) return '一般';
+    if (h > 0.15) return '低落';
+    return '很难过';
+  }
+
+  /// V4: 暴露 AI 参数给外部（供 HomePage 设置页重置按钮）
+  Future<void> resetAITuner() async => _aiTuner.reset();
+
+  /// V4: 获取当前 AI 韵律参数
+  AITuneResult get aiTuneResult => _aiTuner.current;
+
+  /// V4: 暴露 AI 参数给外部
+  String get aiMoodBias => _aiMoodBias;
+  double get aiBoost => _aiBoost;
+  EyeFlavor get aiEyeFlavor => _aiEyeFlavor;
+  double get aiProactive => _aiProactive;
 
   /// 记录 thought 设置时间，5 秒后自动清除
   void _scheduleThoughtClear() {
@@ -131,9 +193,22 @@ class PetBloc extends Bloc<PetEvent, PetState> {
 
     final action = UserAction.pet();
     final reaction = _engine.process(action, currentState: state);
-    final newState = _applyReaction(reaction);
+
+    // V4: 性格加成 — playful 时额外加一点心情
+    final moodBiasBonus = _aiMoodBias == 'playful' ? 0.05 : 0.0;
+    final adjustedReaction = PetReaction(
+      targetMood: reaction.targetMood,
+      happinessDelta: reaction.happinessDelta + moodBiasBonus,
+      energyDelta: reaction.energyDelta,
+      intimacyDelta: reaction.intimacyDelta,
+      systemHint: reaction.systemHint,
+      suggestedActivity: reaction.suggestedActivity,
+    );
+
+    final newState = _applyReaction(adjustedReaction);
     _growth = _growth.recordPet();
     _growth.save();
+    _todayInteractionCount++;
     emit(newState);
     await _saveState(newState);
 
@@ -189,6 +264,7 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     final thought = aiReply ?? reaction.systemHint;
     final newState = _applyReaction(reaction).copyWith(thought: thought);
     _scheduleThoughtClear();
+    _todayInteractionCount++;
     emit(newState);
     await _saveState(newState);
 
@@ -225,6 +301,7 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     );
     _growth = _growth.recordFeed();
     _growth.save();
+    _todayInteractionCount++;
     emit(newState);
     await _saveState(newState);
 
@@ -237,9 +314,11 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     final action = UserAction.shake();
     final reaction = _engine.process(action, currentState: state);
     final newState = _applyReaction(reaction);
+    _todayInteractionCount++;
     emit(newState);
     await _saveState(newState);
 
+    // V4: lazy 性格时摇晃晕眩时间减半（视觉层处理，此处仅标记）
     Future.delayed(const Duration(seconds: 2), () {
       if (!isClosed) add(PetSetMoodEvent(PetMood.calm));
     });
@@ -475,11 +554,41 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     if (eventThought != null || hungryThought != null || reaction.systemHint.isNotEmpty) {
       _scheduleThoughtClear();
     }
-    emit(newState);
 
-    if (newState.mood != state.mood || newState.intimacy != state.intimacy) {
-      _saveState(newState);
+    // ============================================================
+    // V4: AI 韵律调节器 — 主动求关注检测
+    // ============================================================
+    final proactiveThought = _checkProactiveNudge(now, idleHours);
+    final finalState = proactiveThought != null
+        ? newState.copyWith(thought: proactiveThought)
+        : newState;
+    if (proactiveThought != null) _scheduleThoughtClear();
+
+    emit(finalState);
+
+    if (finalState.mood != state.mood || finalState.intimacy != state.intimacy) {
+      _saveState(finalState);
     }
+  }
+
+  /// V4: AI 韵律 — 主动求关注（空闲 30 分钟以上 + proactive_chance 触发）
+  String? _checkProactiveNudge(DateTime now, int idleHours) {
+    if (idleHours < 0.5) return null; // 不足 30 分钟
+    if (_aiProactive <= 0.0) return null;
+
+    // 每 tick 有 (proactiveChance * 10%) 概率触发（约 3 分钟一次期望）
+    final triggerChance = _aiProactive * 0.10;
+    final rng = math.Random(now.millisecondsSinceEpoch ~/ 30000).nextDouble();
+    if (rng >= triggerChance) return null;
+
+    // 主动求关注语录
+    final nudges = [
+      '盯... 你在做什么呀？',
+      '好无聊哦，来陪陪我嘛~',
+      '想你了... 摸摸我的头吧',
+      '哼，这么久不理我！',
+    ];
+    return nudges[now.second % nudges.length];
   }
 
   /// 进入睡眠
@@ -503,6 +612,7 @@ class PetBloc extends Bloc<PetEvent, PetState> {
         _lastDailyEventDate.year != now.year) {
       _lastDailyEventDate = now;
       _todayEventsFired = 0;
+      _todayInteractionCount = 0; // V4: 每日互动计数重置
     }
 
     // 已达到每日事件上限
@@ -537,6 +647,14 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     final newState = state.copyWith(mood: event.mood, lastInteraction: DateTime.now());
     emit(newState);
     _saveState(newState);
+    // V4: 手动设为开心时，3 秒后自动回平静
+    if (event.mood == PetMood.happy) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (!isClosed && state.mood == PetMood.happy) {
+          add(PetSetMoodEvent(PetMood.calm));
+        }
+      });
+    }
   }
 
   void _onSetActivity(PetSetActivityEvent event, Emitter<PetState> emit) {

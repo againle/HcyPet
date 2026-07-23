@@ -22,6 +22,7 @@ class IdleBehaviorScheduler {
   double _energy = 0.8;
   bool _isCalm = true;
   double _smoothShift = 0; // 平滑眼平移（指数衰减回中）
+  double _boost = 1.0;     // V4: AI 动作频率倍率 (0.5~2.0)
 
   static const _cfg = {
     MicroState.idle: (1.0, 3.5), MicroState.blinkQuick: (0.12, 0.18),
@@ -41,6 +42,8 @@ class IdleBehaviorScheduler {
   void setBaseExpression(MochiExpression e) { _base = e; }
   void setEnergy(double e) { _energy = e.clamp(0.0, 1.0); }
   void setIsCalm(bool calm) { _isCalm = calm; }
+  /// V4: 设置 AI 动作频率倍率（影响空闲动作间隔）
+  void setActionBoost(double boost) { _boost = boost.clamp(0.5, 2.0); }
 
   void update(double dt) {
     _elapsed += dt;
@@ -92,7 +95,14 @@ class IdleBehaviorScheduler {
     } else { _schedule(MicroState.idle); }
   }
 
-  void _schedule(MicroState s) { _st = s; _elapsed = 0; final cfg = _cfg[s]!; _duration = cfg.$1 + _r.nextDouble() * (cfg.$2 - cfg.$1); }
+  void _schedule(MicroState s) {
+    _st = s;
+    _elapsed = 0;
+    final cfg = _cfg[s]!;
+    // V4: boost 倍率影响持续时间（boost>1 → 更短间隔 → 更活泼）
+    final scale = 1.0 / _boost;
+    _duration = (cfg.$1 + _r.nextDouble() * (cfg.$2 - cfg.$1)) * scale;
+  }
 
   MicroDelta _compute() {
     final p = stateProgress;

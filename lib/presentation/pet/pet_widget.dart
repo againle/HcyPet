@@ -4,16 +4,18 @@ import "package:flutter/services.dart";
 import "../../models/pet_state.dart";
 import "../../theme/design_constants.dart";import '../../services/wish_system.dart';import "idle_behavior_scheduler.dart";
 import "mochi_physics.dart";
-import "pet_painter.dart";
+import "pet_painter.dart"; // 含 EyeFlavor
 
 class PetWidget extends StatefulWidget {
   final PetState state;
   final double size;
+  /// V4: AI 韵律动作频率倍率
+  final double aiBoost;
   final VoidCallback? onTap, onDoubleTap, onLongPressStart, onLongPressEnd, onMultiTap;
   final void Function(DragUpdateDetails)? onPanUpdate;
   final void Function(DragEndDetails)? onPanEnd;
   final void Function(double)? onPinchUpdate;
-  const PetWidget({super.key, required this.state, this.size = 280, this.onTap, this.onDoubleTap, this.onLongPressStart, this.onLongPressEnd, this.onMultiTap, this.onPanUpdate, this.onPanEnd, this.onPinchUpdate});
+  const PetWidget({super.key, required this.state, this.size = 280, this.aiBoost = 1.0, this.onTap, this.onDoubleTap, this.onLongPressStart, this.onLongPressEnd, this.onMultiTap, this.onPanUpdate, this.onPanEnd, this.onPinchUpdate});
   @override
   State<PetWidget> createState() => PetWidgetState();
 }
@@ -38,6 +40,7 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
     _eye..setTarget(_tgt.eyelidOpen)..snap();
     _blush..setTarget(_tgt.blushOpacity)..snap();
     _idl.setBaseExpression(_tgt); _idl.reset();
+    _idl.setActionBoost(widget.aiBoost); // V4
     _startTk();
     // 检查是否在生气
     if (WishSystem.isAngry) { _backFacing = true; WishSystem.clearAnger(); Future.delayed(const Duration(seconds: 4), () { _backFacing = false; if (mounted) setState(() {}); }); }
@@ -52,6 +55,10 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
       _idl.setBaseExpression(_tgt);
       _eye.setTarget(_tgt.eyelidOpen);
       _blush.setTarget(_tgt.blushOpacity);
+    }
+    // V4: AI boost 变化时更新空闲调度器
+    if (ow.aiBoost != widget.aiBoost) {
+      _idl.setActionBoost(widget.aiBoost);
     }
   }
 
@@ -83,8 +90,37 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
 
   bool _dazed = false;
   bool _backFacing = false;
+  /// V4: 临时眼型修饰
+  EyeFlavor _eyeFlavor = EyeFlavor.normal;
+
   void setPinchScale(double s) { _ps = s.clamp(0.6, 1.4); if (mounted) setState(() {}); }
   void resetPinchScale() { _ps = 1.0; if (mounted) setState(() {}); }
+
+  /// V4: 触发 wink（左眼闭右眼睁，0.8 秒后自动恢复）
+  void triggerWink() {
+    _eyeFlavor = EyeFlavor.wink;
+    if (mounted) setState(() {});
+    Future.delayed(const Duration(milliseconds: 800), () {
+      _eyeFlavor = EyeFlavor.normal;
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// V4: 触发 cheeky 眼（< 形，5 秒后自动恢复）
+  void triggerCheeky() {
+    _eyeFlavor = EyeFlavor.cheeky;
+    if (mounted) setState(() {});
+    Future.delayed(const Duration(seconds: 5), () {
+      _eyeFlavor = EyeFlavor.normal;
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// V4: AI 韵律调节器设置眼型（外部调用，持续到下次刷新）
+  void setEyeFlavor(EyeFlavor flavor) {
+    _eyeFlavor = flavor;
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext ctx) {
@@ -106,7 +142,11 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
         showHearts: ps.mood == PetMood.missing,
         showZzz: ps.mood == PetMood.sleepy && ps.activity != PetActivity.sleeping,
         dazed: _dazed || ps.mood == PetMood.surprised,
-        squashStretch: _sq.position, spiralAngle: _spiralAngle, backFacing: _backFacing, allowArc: blend > 0.85, forceArc: widget.state.mood == PetMood.happy && blend > 0.85, happyMood: widget.state.mood == PetMood.happy),
+        squashStretch: _sq.position, spiralAngle: _spiralAngle, backFacing: _backFacing,
+        allowArc: blend > 0.85, forceArc: widget.state.mood == PetMood.happy && blend > 0.85,
+        happyMood: widget.state.mood == PetMood.happy,
+        eyeFlavor: _eyeFlavor,
+      ),
     ));
   }
 
