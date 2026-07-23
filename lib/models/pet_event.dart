@@ -18,7 +18,8 @@ class PetPetEvent extends PetEvent {}
 /// 用户与宠物说话（语音或文字）
 class PetTalkEvent extends PetEvent {
   final String? message;
-  const PetTalkEvent({this.message});
+  final bool isVoice;
+  const PetTalkEvent({this.message, this.isVoice = false});
 }
 
 /// 喂食宠物
