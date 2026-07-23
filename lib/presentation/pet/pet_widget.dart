@@ -26,6 +26,7 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
   final IdleBehaviorScheduler _idl = IdleBehaviorScheduler();
   Ticker? _tk;
   Duration? _lt;
+  double _spiralAngle = 0;
   MochiExpression _tgt = MochiExpression.calm;
   PetMood? _lm;
   double _ps = 1.0;
@@ -63,6 +64,7 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
     _idl.setEnergy(widget.state.energy);
     _idl.setIsCalm(widget.state.mood == PetMood.calm);
     _idl.update(dt);
+    _spiralAngle += dt * 4; // 螺旋持续旋转
     if (mounted) setState(() {});
   }
 
@@ -73,9 +75,16 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
   };
 
   void triggerHappyBounce() { _blush.setTarget(0.45, initialVelocity: 0.3); _eye.setTarget(0.5, initialVelocity: 0.3); HapticFeedback.lightImpact(); }
-  void triggerStartle() { _eye.setTarget(1.0, initialVelocity: 0.5); HapticFeedback.heavyImpact(); }
+  void triggerStartle() { _eye.setTarget(1.0, initialVelocity: 0.5); _dazedTrigger(); HapticFeedback.heavyImpact(); }
   void applySquash(double a) => _sq.setTarget(a.clamp(-1.0, 1.0));
-  void releaseSquash() { _sq.setTarget(0.0); HapticFeedback.mediumImpact(); }
+  void releaseSquash() { _sq.setTarget(0.0); _dazedTrigger(); HapticFeedback.mediumImpact(); }
+
+  bool _dazed = false;
+  void _dazedTrigger() {
+    _dazed = true;
+    Future.delayed(const Duration(milliseconds: 1500), () { _dazed = false; if (mounted) setState(() {}); });
+    if (mounted) setState(() {});
+  }
   void setPinchScale(double s) { _ps = s.clamp(0.6, 1.4); if (mounted) setState(() {}); }
   void resetPinchScale() { _ps = 1.0; if (mounted) setState(() {}); }
 
@@ -98,8 +107,8 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
         isSleeping: ps.activity == PetActivity.sleeping,
         showHearts: ps.mood == PetMood.missing,
         showZzz: ps.mood == PetMood.sleepy && ps.activity != PetActivity.sleeping,
-        surpriseMouth: ps.mood == PetMood.surprised,
-        squashStretch: _sq.position, allowArc: blend > 0.85, forceArc: widget.state.mood == PetMood.happy && blend > 0.85, happyMood: widget.state.mood == PetMood.happy),
+        dazed: _dazed || ps.mood == PetMood.surprised,
+        squashStretch: _sq.position, spiralAngle: _spiralAngle, allowArc: blend > 0.85, forceArc: widget.state.mood == PetMood.happy && blend > 0.85, happyMood: widget.state.mood == PetMood.happy),
     ));
   }
 

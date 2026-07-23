@@ -500,22 +500,20 @@ class _StudyPageState extends State<StudyPage> with SingleTickerProviderStateMix
 
   Widget _buildPetCompanion() {
     return BlocBuilder<PetBloc, PetState>(
-      builder: (context, petState) => Center(
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          PetWidget(state: petState, size: 100),
-          if (petState.thought != null)
-            Padding(padding: const EdgeInsets.only(top: 6),
-                child: Text(petState.thought!, style: TextStyle(fontSize: 11, color: const Color(0xFF4FC3F7).withOpacity(0.25)))),
-          BlocBuilder<StudyBloc, StudyState>(
-            builder: (context, s) {
-              if (s.status == TimerStatus.running)
-                return Padding(padding: const EdgeInsets.only(top: 4),
-                    child: Text(_getStudyStatusText(), style: TextStyle(fontSize: 10, color: _getStudyStatusColor())));
-              return const SizedBox.shrink();
-            },
-          ),
-        ]),
-      ),
+      builder: (context, petState) => Column(children: [
+        Expanded(child: Center(child: PetWidget(state: petState, size: 60))),
+        if (petState.thought != null)
+          Padding(padding: const EdgeInsets.only(bottom: 2),
+              child: Text(petState.thought!, style: TextStyle(fontSize: 10, color: const Color(0xFF4FC3F7).withOpacity(0.2)))),
+        BlocBuilder<StudyBloc, StudyState>(
+          builder: (context, s) {
+            if (s.status == TimerStatus.running)
+              return Padding(padding: const EdgeInsets.only(bottom: 2),
+                  child: Text(_getStudyStatusText(), style: TextStyle(fontSize: 9, color: _getStudyStatusColor())));
+            return const SizedBox.shrink();
+          },
+        ),
+      ]),
     );
   }
 

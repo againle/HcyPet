@@ -213,6 +213,9 @@ class VisionDetector: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     ) -> Bool {
         GeneratedPluginRegistrant.register(with: self)
 
+        // 保持屏幕常亮
+        UIApplication.shared.isIdleTimerDisabled = true
+
         guard let controller = window?.rootViewController as? FlutterViewController else {
             return super.application(application, didFinishLaunchingWithOptions: launchOptions)
         }

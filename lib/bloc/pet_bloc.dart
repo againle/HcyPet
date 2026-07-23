@@ -174,13 +174,15 @@ class PetBloc extends Bloc<PetEvent, PetState> {
       if (!result.isError) aiReply = result.text;
     } catch (_) {}
 
-    // 保存记忆
-    await MemoryBank.addMemory(MemoryEntry(
-      userSaid: message,
-      mood: reaction.targetMood.name,
-      timeLabel: _timeLabel(DateTime.now()),
-      timestamp: DateTime.now(),
-    ));
+    // 保存记忆（失败不影响主流程）
+    try {
+      await MemoryBank.addMemory(MemoryEntry(
+        userSaid: message,
+        mood: reaction.targetMood.name,
+        timeLabel: _timeLabel(DateTime.now()),
+        timestamp: DateTime.now(),
+      ));
+    } catch (_) {}
 
     final thought = aiReply ?? reaction.systemHint;
     final newState = _applyReaction(reaction).copyWith(thought: thought);

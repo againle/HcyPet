@@ -86,13 +86,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _onPanUpdate(Offset delta) {
-    // 抚摸：视线跟随手指
-    final screenWidth = MediaQuery.of(context).size.width;
-    final normalizedDx = (delta.dx / screenWidth).clamp(-1.0, 1.0);
-    // 微弱的触觉反馈
-    if (delta.distance > 5) {
-      HapticFeedback.selectionClick();
-    }
+    // 橡皮拉伸：根据位移量挤压/拉伸眼睛
+    final screenW = MediaQuery.of(context).size.width;
+    final stretch = (delta.dx / screenW).clamp(-1.0, 1.0);
+    _petKey.currentState?.applySquash(stretch);
+    if (delta.distance > 3) HapticFeedback.selectionClick();
+  }
+
+  void _onPanEnd(Offset velocity) {
+    // 松手回弹 → 晕眩
+    _petKey.currentState?.releaseSquash();
   }
 
   void _onDragThrow(Offset velocity) {
@@ -140,10 +143,11 @@ class _HomePageState extends State<HomePage> {
                     onMultiTap: _onMultiTap,
                     onDoubleTap: _onDoubleTap,
                     onPanUpdate: _onPanUpdate,
+                    onPanEnd: _onPanEnd,
                     onDragThrow: _onDragThrow,
                     onPinchUpdate: _onPinchUpdate,
                     onPinchEnd: _onPinchEnd,
-                    onTap: () => _showMoodSnackbar(context, state),
+                    onTap: () {},
                     child: _PetWidgetWrapper(
                       key: _petKey,
                       state: state,

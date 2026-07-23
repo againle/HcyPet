@@ -6,12 +6,13 @@ import "mochi_physics.dart";
 class PetPainter extends CustomPainter {
   final MochiExpression expression;
   final double size;
-  final bool isSleeping, showHearts, showZzz, surpriseMouth, allowArc, forceArc, happyMood;
+  final bool isSleeping, showHearts, showZzz, dazed, allowArc, forceArc, happyMood;
   final Color petColor;
   final double squashStretch;
+  final double spiralAngle; // 螺旋旋转角度
   static const _dc = PetStrokeSpec.color;
 
-  const PetPainter({required this.expression, this.size = 200, this.isSleeping = false, this.showHearts = false, this.showZzz = false, this.surpriseMouth = false, this.petColor = _dc, this.squashStretch = 0.0, this.allowArc = true, this.forceArc = false, this.happyMood = false});
+  const PetPainter({required this.expression, this.size = 200, this.isSleeping = false, this.showHearts = false, this.showZzz = false, this.dazed = false, this.petColor = _dc, this.squashStretch = 0.0, this.allowArc = true, this.forceArc = false, this.happyMood = false, this.spiralAngle = 0.0});
 
   double get _op => isSleeping ? 0.3 : 1.0;
 
@@ -30,8 +31,7 @@ class PetPainter extends CustomPainter {
     if (squashStretch != 0) { final sx = 1 + squashStretch * 0.15; final sy = 1 - squashStretch * 0.15; c.translate(ct.dx, ct.dy); c.scale(sx, sy); c.translate(-ct.dx, -ct.dy); }
     _blush(c, ct, sc);
     _eyes(c, ct, sc);
-    if (surpriseMouth) _surpriseMouth(c, ct, sc);
-    if (showZzz || isSleeping) _zzz(c, Offset(ct.dx + 38 * sc, ct.dy - 48 * sc), sc * 0.7);
+    if (showZzz || isSleeping) _zzz(c, Offset(ct.dx + 50 * sc, ct.dy - 60 * sc), sc * 0.8);
     if (showHearts) _hearts(c, ct, sc);
     c.restore();
   }
@@ -47,11 +47,8 @@ class PetPainter extends CustomPainter {
 
   void _eyes(Canvas c, Offset ct, double sc) {
     if (expression.eyelidOpen <= 0.02) { _closed(c, ct, sc); return; }
-    if (forceArc) {
-      // 笑脸模式：只用弧形，眨眼即弧线压扁→弹起，永不出方块
-      _arcEyes(c, ct, sc, 1.0);
-      return;
-    }
+    if (dazed) { _spiralEyes(c, ct, sc); return; }
+    if (forceArc) { _arcEyes(c, ct, sc, 1.0); return; }
     final as = _arcStrength;
     final roundOpacity = 1.0 - as;
     final arcOpacity = as;
@@ -61,9 +58,9 @@ class PetPainter extends CustomPainter {
 
   void _roundEyes(Canvas c, Offset ct, double sc, [double opacity = 1.0]) {
     final o = expression.eyelidOpen.clamp(0.04, 1.0);
-    final ew = 28 * sc; final eh = 70 * sc * o; final sp = 34 * sc;
-    final r = (14 * sc * o).clamp(3 * sc, 14 * sc);
-    final sx = expression.eyeShiftX * 12 * sc; // 眼睛水平平移
+    final ew = 56 * sc; final eh = 140 * sc * o; final sp = 68 * sc; // 2x 放大
+    final r = (28 * sc * o).clamp(3 * sc, 28 * sc);
+    final sx = expression.eyeShiftX * 18 * sc;
     final p = Paint()..color = petColor.withOpacity(_op * opacity)..style = PaintingStyle.fill;
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(ct.dx - sp + sx, ct.dy), width: ew, height: eh), Radius.circular(r)), p);
     c.drawRRect(RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(ct.dx + sp + sx, ct.dy), width: ew, height: eh), Radius.circular(r)), p);
@@ -71,24 +68,48 @@ class PetPainter extends CustomPainter {
 
   void _arcEyes(Canvas c, Offset ct, double sc, [double opacity = 1.0]) {
     final o = expression.eyelidOpen.clamp(0.03, 0.55);
-    final ah = o * 35 * sc; // 闭眼→0px, 开心→19px, 丝滑缩放
-    final span = 40 * sc; final sp = 36 * sc;
-    final sx = expression.eyeShiftX * 12 * sc;
+    final ah = o * 60 * sc; final span = 72 * sc; final sp = 68 * sc;
+    final sx = expression.eyeShiftX * 18 * sc;
     final p = Paint()..color = petColor.withOpacity(_op * opacity)..style = PaintingStyle.stroke..strokeWidth = 8 * sc..strokeCap = StrokeCap.round;
     c.drawPath(Path()..moveTo(ct.dx - sp - span / 2 + sx, ct.dy + 3 * sc)..quadraticBezierTo(ct.dx - sp + sx, ct.dy - ah, ct.dx - sp + span / 2 + sx, ct.dy + 3 * sc), p);
     c.drawPath(Path()..moveTo(ct.dx + sp - span / 2 + sx, ct.dy + 3 * sc)..quadraticBezierTo(ct.dx + sp + sx, ct.dy - ah, ct.dx + sp + span / 2 + sx, ct.dy + 3 * sc), p);
   }
 
   void _closed(Canvas c, Offset ct, double sc) {
-    final lw = 18 * sc; final sp = 28 * sc; final sx = expression.eyeShiftX * 12 * sc;
-    final p = Paint()..color = petColor.withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 2.5 * sc..strokeCap = StrokeCap.round;
-    c.drawPath(Path()..moveTo(ct.dx - sp - lw / 2 + sx, ct.dy)..quadraticBezierTo(ct.dx - sp + sx, ct.dy + 6 * sc, ct.dx - sp + lw / 2 + sx, ct.dy), p);
-    c.drawPath(Path()..moveTo(ct.dx + sp - lw / 2 + sx, ct.dy)..quadraticBezierTo(ct.dx + sp + sx, ct.dy + 6 * sc, ct.dx + sp + lw / 2 + sx, ct.dy), p);
+    final lw = 28 * sc; final sp = 56 * sc; final sx = expression.eyeShiftX * 18 * sc;
+    final p = Paint()..color = petColor.withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 3 * sc..strokeCap = StrokeCap.round;
+    c.drawPath(Path()..moveTo(ct.dx - sp - lw / 2 + sx, ct.dy)..quadraticBezierTo(ct.dx - sp + sx, ct.dy + 8 * sc, ct.dx - sp + lw / 2 + sx, ct.dy), p);
+    c.drawPath(Path()..moveTo(ct.dx + sp - lw / 2 + sx, ct.dy)..quadraticBezierTo(ct.dx + sp + sx, ct.dy + 8 * sc, ct.dx + sp + lw / 2 + sx, ct.dy), p);
+  }
+
+  /// 旋转螺旋眼（棒棒糖旋涡）
+  void _spiralEyes(Canvas c, Offset ct, double sc) {
+    final sp = 68 * sc;
+    for (final dx in [-sp, sp]) {
+      final cx = ct.dx + dx; final cy = ct.dy;
+      final p = Paint()..color = petColor.withOpacity(_op)..style = PaintingStyle.stroke..strokeWidth = 3.5 * sc..strokeCap = StrokeCap.round;
+      // 阿基米德螺旋：r = a + b*θ，从中心向外画
+      final path = Path();
+      final maxR = 32 * sc;
+      const turns = 2.5; // 2.5 圈
+      const steps = 80;
+      final a = 2 * sc; // 起始半径
+      final b = (maxR - a) / (turns * 2 * math.pi);
+      var first = true;
+      for (int i = 0; i <= steps; i++) {
+        final t = i / steps; // 0→1
+        final theta = spiralAngle + t * turns * 2 * math.pi;
+        final r = a + b * (t * turns * 2 * math.pi);
+        final x = cx + r * math.cos(theta);
+        final y = cy + r * math.sin(theta);
+        if (first) { path.moveTo(x, y); first = false; } else { path.lineTo(x, y); }
+      }
+      c.drawPath(path, p);
+    }
   }
 
   void _surpriseMouth(Canvas c, Offset ct, double sc) {
-    final p = Paint()..color = petColor.withOpacity(_op)..style = PaintingStyle.stroke..strokeWidth = 2.5 * sc;
-    c.drawOval(Rect.fromCenter(center: Offset(ct.dx, ct.dy + 36 * sc), width: 14 * sc, height: 18 * sc), p);
+    // 不再使用，保留空方法兼容
   }
 
   void _zzz(Canvas c, Offset o, double sc) {
