@@ -170,7 +170,9 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     String? aiReply;
     try {
       final memories = await MemoryBank.getRecent(5);
-      final result = await DeepSeekService().chat(message, memoryContext: memories);
+      final diary = await MemoryBank.getTodayDiary();
+      final prompt = diary != null ? '昨天的日记：$diary' : null;
+      final result = await DeepSeekService().chat(message, memoryContext: memories, systemPrompt: prompt);
       if (!result.isError) aiReply = result.text;
     } catch (_) {}
 

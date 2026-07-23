@@ -14,10 +14,10 @@ import 'notification_service.dart';
 class WishSystem {
   static Timer? _wishTimer;
   static Timer? _ignoreTimer;
+  static Timer? _diaryTimer;
   static bool _ignored = false;
   static final List<String> _cachedWishes = [];
 
-  /// 本地备用心愿（无需 API）
   static const _fallbackWishes = [
     'Mochi 想你了，来摸摸它的头吧~',
     'Mochi 饿了，想要小饼干 🍪',
@@ -28,15 +28,16 @@ class WishSystem {
     'Mochi 好像有点孤单…',
   ];
 
-  /// 启动心愿系统
+  /// 启动（心愿 + 日记）
   static void start() {
     _scheduleNextWish();
+    _scheduleDiary();
   }
 
-  /// 停止
   static void stop() {
     _wishTimer?.cancel();
     _ignoreTimer?.cancel();
+    _diaryTimer?.cancel();
   }
 
   /// 用户打开了 App → 检查是否在生气
@@ -83,5 +84,33 @@ class WishSystem {
     });
 
     _scheduleNextWish();
+  }
+
+  /// 安排每日凌晨 2:00 日记压缩
+  static void _scheduleDiary() {
+    final now = DateTime.now();
+    var nextRun = DateTime(now.year, now.month, now.day, 2, 0, 0);
+    if (now.isAfter(nextRun)) nextRun = nextRun.add(const Duration(days: 1));
+    final delay = nextRun.difference(now);
+    _diaryTimer?.cancel();
+    _diaryTimer = Timer(delay, () {
+      _fireDiary();
+      _scheduleDiary(); // 递归调度下一天
+    });
+  }
+
+  static Future<void> _fireDiary() async {
+    try {
+      final memories = await MemoryBank.getToday();
+      if (memories.length < 3) return; // 少于 3 条不值得压缩
+      final yesterday = DateTime.now().subtract(const Duration(days: 1));
+      final dateKey = '${yesterday.year}-${yesterday.month.toString().padLeft(2, '0')}-${yesterday.day.toString().padLeft(2, '0')}';
+      final existing = await MemoryBank.getLastDiaryDate();
+      if (existing == dateKey) return; // 已生成过
+      final diary = await DeepSeekService().generateDiary(memories);
+      if (diary != null && diary.isNotEmpty) {
+        await MemoryBank.saveDiary(dateKey, diary);
+      }
+    } catch (_) {}
   }
 }

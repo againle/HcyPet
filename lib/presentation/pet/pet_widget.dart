@@ -2,8 +2,7 @@
 import "package:flutter/scheduler.dart";
 import "package:flutter/services.dart";
 import "../../models/pet_state.dart";
-import "../../theme/design_constants.dart";
-import "idle_behavior_scheduler.dart";
+import "../../theme/design_constants.dart";import '../../services/wish_system.dart';import "idle_behavior_scheduler.dart";
 import "mochi_physics.dart";
 import "pet_painter.dart";
 
@@ -40,6 +39,8 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
     _blush..setTarget(_tgt.blushOpacity)..snap();
     _idl.setBaseExpression(_tgt); _idl.reset();
     _startTk();
+    // 检查是否在生气
+    if (WishSystem.isAngry) { _backFacing = true; WishSystem.clearAnger(); Future.delayed(const Duration(seconds: 4), () { _backFacing = false; if (mounted) setState(() {}); }); }
   }
 
   @override
@@ -74,13 +75,14 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
     PetMood.sleepy => MochiExpression.sleepy, PetMood.missing => MochiExpression.missing,
   };
 
-  void triggerHappyBounce() { _blush.setTarget(0.45, initialVelocity: 0.3); _eye.setTarget(0.5, initialVelocity: 0.3); HapticFeedback.lightImpact(); }
+  void triggerHappyBounce() { _backFacing = false; _blush.setTarget(0.45, initialVelocity: 0.3); _eye.setTarget(0.5, initialVelocity: 0.3); HapticFeedback.lightImpact(); }
   void triggerStartle() { _eye.setTarget(1.0, initialVelocity: 0.5); HapticFeedback.heavyImpact(); }
   void triggerDazed(Duration duration) { _dazed = true; Future.delayed(duration, () { _dazed = false; if (mounted) setState(() {}); }); if (mounted) setState(() {}); }
   void applySquash(double a) => _sq.setTarget(a.clamp(-1.0, 1.0));
   void releaseSquash() { _sq.setTarget(0.0); _dazed = true; Future.delayed(const Duration(milliseconds: 1200), () { _dazed = false; if (mounted) setState(() {}); }); HapticFeedback.mediumImpact(); if (mounted) setState(() {}); }
 
   bool _dazed = false;
+  bool _backFacing = false;
   void setPinchScale(double s) { _ps = s.clamp(0.6, 1.4); if (mounted) setState(() {}); }
   void resetPinchScale() { _ps = 1.0; if (mounted) setState(() {}); }
 
@@ -104,7 +106,7 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
         showHearts: ps.mood == PetMood.missing,
         showZzz: ps.mood == PetMood.sleepy && ps.activity != PetActivity.sleeping,
         dazed: _dazed || ps.mood == PetMood.surprised,
-        squashStretch: _sq.position, spiralAngle: _spiralAngle, allowArc: blend > 0.85, forceArc: widget.state.mood == PetMood.happy && blend > 0.85, happyMood: widget.state.mood == PetMood.happy),
+        squashStretch: _sq.position, spiralAngle: _spiralAngle, backFacing: _backFacing, allowArc: blend > 0.85, forceArc: widget.state.mood == PetMood.happy && blend > 0.85, happyMood: widget.state.mood == PetMood.happy),
     ));
   }
 

@@ -6,13 +6,13 @@ import "mochi_physics.dart";
 class PetPainter extends CustomPainter {
   final MochiExpression expression;
   final double size;
-  final bool isSleeping, showHearts, showZzz, dazed, allowArc, forceArc, happyMood;
+  final bool isSleeping, showHearts, showZzz, dazed, allowArc, forceArc, happyMood, backFacing;
   final Color petColor;
   final double squashStretch;
-  final double spiralAngle; // 螺旋旋转角度
+  final double spiralAngle;
   static const _dc = PetStrokeSpec.color;
 
-  const PetPainter({required this.expression, this.size = 200, this.isSleeping = false, this.showHearts = false, this.showZzz = false, this.dazed = false, this.petColor = _dc, this.squashStretch = 0.0, this.allowArc = true, this.forceArc = false, this.happyMood = false, this.spiralAngle = 0.0});
+  const PetPainter({required this.expression, this.size = 200, this.isSleeping = false, this.showHearts = false, this.showZzz = false, this.dazed = false, this.petColor = _dc, this.squashStretch = 0.0, this.allowArc = true, this.forceArc = false, this.happyMood = false, this.spiralAngle = 0.0, this.backFacing = false});
 
   double get _op => isSleeping ? 0.3 : 1.0;
 
@@ -47,6 +47,7 @@ class PetPainter extends CustomPainter {
 
   void _eyes(Canvas c, Offset ct, double sc) {
     if (expression.eyelidOpen <= 0.02) { _closed(c, ct, sc); return; }
+    if (backFacing) { _backEyes(c, ct, sc); return; }
     if (dazed) { _spiralEyes(c, ct, sc); return; }
     if (forceArc) { _arcEyes(c, ct, sc, 1.0); return; }
     final as = _arcStrength;
@@ -107,8 +108,28 @@ class PetPainter extends CustomPainter {
     }
   }
 
-  void _surpriseMouth(Canvas c, Offset ct, double sc) {
-    // 不再使用，保留空方法兼容
+  /// 后脑勺生气：小眼远距 + 手绘生气符号
+  void _backEyes(Canvas c, Offset ct, double sc) {
+    final sp = 60 * sc;
+    final r = 10 * sc;
+    final peek = math.sin(DateTime.now().millisecondsSinceEpoch * 0.003) * 6 * sc;
+    final p = Paint()..color = petColor.withOpacity(0.45)..style = PaintingStyle.fill;
+    c.drawCircle(Offset(ct.dx - sp + peek, ct.dy), r, p);
+    c.drawCircle(Offset(ct.dx + sp + peek, ct.dy), r, p);
+    // 手绘生气符号 #
+    _drawAngerMark(c, Offset(ct.dx, ct.dy - 35 * sc), 10 * sc);
+  }
+
+  void _drawAngerMark(Canvas c, Offset o, double s) {
+    final p = Paint()..color = petColor.withOpacity(0.5)..style = PaintingStyle.stroke..strokeWidth = 2.5..strokeCap = StrokeCap.round;
+    final cx = o.dx; final cy = o.dy;
+    c.drawLine(Offset(cx - s, cy - s), Offset(cx + s, cy + s), p);
+    c.drawLine(Offset(cx + s, cy - s), Offset(cx - s, cy + s), p);
+    // 四角小爆点
+    for (final dx in [-s, s]) { for (final dy in [-s, s]) {
+      c.drawLine(Offset(cx + dx, cy + dy - s * 0.3), Offset(cx + dx, cy + dy + s * 0.3), p);
+      c.drawLine(Offset(cx + dx - s * 0.3, cy + dy), Offset(cx + dx + s * 0.3, cy + dy), p);
+    }}
   }
 
   void _zzz(Canvas c, Offset o, double sc) {
