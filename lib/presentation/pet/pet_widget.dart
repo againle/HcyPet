@@ -99,7 +99,7 @@ class PetWidgetState extends State<PetWidget> with TickerProviderStateMixin {
         showHearts: ps.mood == PetMood.missing,
         showZzz: ps.mood == PetMood.sleepy && ps.activity != PetActivity.sleeping,
         surpriseMouth: ps.mood == PetMood.surprised,
-        squashStretch: _sq.position, allowArc: blend > 0.85, forceArc: widget.state.mood == PetMood.happy && blend > 0.85),
+        squashStretch: _sq.position, allowArc: blend > 0.85, forceArc: widget.state.mood == PetMood.happy && blend > 0.85, happyMood: widget.state.mood == PetMood.happy),
     ));
   }
 

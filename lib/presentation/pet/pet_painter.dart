@@ -6,21 +6,20 @@ import "mochi_physics.dart";
 class PetPainter extends CustomPainter {
   final MochiExpression expression;
   final double size;
-  final bool isSleeping, showHearts, showZzz, surpriseMouth, allowArc, forceArc;
+  final bool isSleeping, showHearts, showZzz, surpriseMouth, allowArc, forceArc, happyMood;
   final Color petColor;
   final double squashStretch;
   static const _dc = PetStrokeSpec.color;
 
-  const PetPainter({required this.expression, this.size = 200, this.isSleeping = false, this.showHearts = false, this.showZzz = false, this.surpriseMouth = false, this.petColor = _dc, this.squashStretch = 0.0, this.allowArc = true, this.forceArc = false});
+  const PetPainter({required this.expression, this.size = 200, this.isSleeping = false, this.showHearts = false, this.showZzz = false, this.surpriseMouth = false, this.petColor = _dc, this.squashStretch = 0.0, this.allowArc = true, this.forceArc = false, this.happyMood = false});
 
   double get _op => isSleeping ? 0.3 : 1.0;
 
-  /// 弧形眼强度：仅在允许 + eyelidOpen [0.45, 0.62] 区间渐变（窄范围防误触）
   double get _arcStrength {
-    if (!allowArc) return 0.0;
+    if (!allowArc || !happyMood) return 0.0; // 仅笑脸 mood 允许弧
     final e = expression.eyelidOpen;
     if (e <= 0.45 || e >= 0.65) return 0.0;
-    return (1.0 - (e - 0.55).abs() / 0.10).clamp(0.0, 1.0); // 峰值精确 0.55
+    return (1.0 - (e - 0.55).abs() / 0.10).clamp(0.0, 1.0);
   }
 
   @override

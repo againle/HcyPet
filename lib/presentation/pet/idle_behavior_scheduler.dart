@@ -1,7 +1,7 @@
 ﻿import "dart:math";
 import "mochi_physics.dart";
 
-enum MicroState { idle, blinkQuick, blinkSlow, lookLeft, lookRight, yawn }
+enum MicroState { idle, blinkQuick, lookLeft, lookRight, yawn }
 
 class MicroDelta {
   final double eyelidDelta, blushDelta, eyeShiftDelta;
@@ -25,12 +25,12 @@ class IdleBehaviorScheduler {
 
   static const _cfg = {
     MicroState.idle: (1.0, 3.5), MicroState.blinkQuick: (0.12, 0.18),
-    MicroState.blinkSlow: (0.6, 1.0), MicroState.lookLeft: (1.1, 2.5),
-    MicroState.lookRight: (1.1, 2.5), MicroState.yawn: (1.0, 2.0),
+    MicroState.lookLeft: (1.1, 2.5), MicroState.lookRight: (1.1, 2.5),
+    MicroState.yawn: (1.0, 2.0),
   };
   static const _baseTr = {
-    MicroState.idle: {MicroState.blinkQuick: 40, MicroState.blinkSlow: 8, MicroState.lookLeft: 12, MicroState.lookRight: 12, MicroState.yawn: 3},
-    MicroState.blinkQuick: {MicroState.idle: 100}, MicroState.blinkSlow: {MicroState.idle: 100},
+    MicroState.idle: {MicroState.blinkQuick: 48, MicroState.lookLeft: 12, MicroState.lookRight: 12, MicroState.yawn: 3},
+    MicroState.blinkQuick: {MicroState.idle: 100},
     MicroState.lookLeft: {MicroState.idle: 100}, MicroState.lookRight: {MicroState.idle: 100},
     MicroState.yawn: {MicroState.idle: 100},
   };
@@ -98,19 +98,17 @@ class IdleBehaviorScheduler {
     final p = stateProgress;
     switch (_st) {
       case MicroState.idle: return MicroDelta.zero;
-      case MicroState.blinkQuick: return _blink(p, true);
-      case MicroState.blinkSlow: return _blink(p, false);
+      case MicroState.blinkQuick: return _blink(p);
       case MicroState.lookLeft: return MicroDelta(eyeShiftDelta: -_lookCurve(p) * 1.5, eyelidDelta: -0.04 * _sc(p));
       case MicroState.lookRight: return MicroDelta(eyeShiftDelta: _lookCurve(p) * 1.5, eyelidDelta: -0.04 * _sc(p));
       case MicroState.yawn: return _yawn(p);
     }
   }
 
-  MicroDelta _blink(double p, bool fast) {
+  MicroDelta _blink(double p) {
     double c;
-    if (fast) { if (p < 0.2) c = p / 0.2; else if (p < 0.6) c = 1.0; else c = 1.0 - (p - 0.6) / 0.4; }
-    else { if (p < 0.3) c = p / 0.3; else if (p < 0.5) c = 1.0; else c = 1.0 - (p - 0.5) / 0.5; }
-    return MicroDelta(eyelidDelta: -c); // 完全闭合 eyelidOpen→0.0，触发闭眼弧线
+    if (p < 0.2) c = p / 0.2; else if (p < 0.6) c = 1.0; else c = 1.0 - (p - 0.6) / 0.4;
+    return MicroDelta(eyelidDelta: -c);
   }
 
   MicroDelta _yawn(double p) {
