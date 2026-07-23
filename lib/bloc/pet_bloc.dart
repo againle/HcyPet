@@ -130,6 +130,10 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     Future.delayed(const Duration(seconds: 3), () {
       if (!isClosed) add(PetSetActivityEvent(PetActivity.idle));
     });
+    // 4 秒后情绪回到平静
+    Future.delayed(const Duration(seconds: 4), () {
+      if (!isClosed) add(PetSetMoodEvent(PetMood.calm));
+    });
   }
 
   Future<void> _onTalk(PetTalkEvent event, Emitter<PetState> emit) async {

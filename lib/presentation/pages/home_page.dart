@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../bloc/pet_bloc.dart';
 import '../../models/pet_event.dart';
@@ -6,10 +7,14 @@ import '../../models/pet_state.dart';
 import '../../models/growth_state.dart';
 import '../../services/sensor_service.dart';
 import '../../theme/design_constants.dart';
+import '../pet/gesture_engine.dart';
 import '../pet/pet_widget.dart';
 import '../widgets/talk_button.dart';
 
-/// 主页 — V2 极简风格
+/// ============================================================
+/// 🍡 Mochi V3 主页 — 全触屏交互 + 弹簧物理
+/// ============================================================
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -19,6 +24,9 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final SensorService _sensorService = SensorService();
+
+  // ── PetWidget 引用（用于触发物理特效） ──
+  final GlobalKey<_PetWidgetWrapperState> _petKey = GlobalKey();
 
   @override
   void initState() {
@@ -38,7 +46,10 @@ class _HomePageState extends State<HomePage> {
         _sensorService.startListening(
           onShake: () {
             if (mounted) {
+              HapticFeedback.heavyImpact();
               context.read<PetBloc>().add(PetShakeEvent());
+              // 触发惊吓物理效果
+              _petKey.currentState?.triggerStartle();
             }
           },
           onAccelerometerUpdate: (x, y, z) {},
@@ -46,6 +57,67 @@ class _HomePageState extends State<HomePage> {
       }
     });
   }
+
+  // ============================================================
+  // 手势处理
+  // ============================================================
+
+  void _onLongPressStart() {
+    HapticFeedback.mediumImpact();
+    context.read<PetBloc>().add(PetPetEvent());
+    _petKey.currentState?.triggerHappyBounce();
+  }
+
+  void _onLongPressEnd() {
+    // 长按结束，恢复平静
+  }
+
+  void _onMultiTap() {
+    HapticFeedback.heavyImpact();
+    context.read<PetBloc>().add(PetPetEvent());
+    // 连击 → 瞳孔地震 + 惊讶
+    _petKey.currentState?.triggerStartle();
+  }
+
+  void _onDoubleTap() {
+    HapticFeedback.lightImpact();
+    context.read<PetBloc>().add(PetPetEvent());
+    _petKey.currentState?.triggerHappyBounce();
+  }
+
+  void _onPanUpdate(Offset delta) {
+    // 抚摸：视线跟随手指
+    final screenWidth = MediaQuery.of(context).size.width;
+    final normalizedDx = (delta.dx / screenWidth).clamp(-1.0, 1.0);
+    // 微弱的触觉反馈
+    if (delta.distance > 5) {
+      HapticFeedback.selectionClick();
+    }
+  }
+
+  void _onDragThrow(Offset velocity) {
+    HapticFeedback.mediumImpact();
+    // 拖拽扔出 → 挤压形变
+    final strength = velocity.distance.clamp(0.0, 2000.0) / 2000.0;
+    _petKey.currentState?.applySquash(strength);
+    // 0.3 秒后释放
+    Future.delayed(const Duration(milliseconds: 300), () {
+      _petKey.currentState?.releaseSquash();
+    });
+    context.read<PetBloc>().add(PetShakeEvent());
+  }
+
+  void _onPinchUpdate(double scale) {
+    _petKey.currentState?.setPinchScale(scale);
+  }
+
+  void _onPinchEnd() {
+    _petKey.currentState?.resetPinchScale();
+  }
+
+  // ============================================================
+  // 构建
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -55,33 +127,42 @@ class _HomePageState extends State<HomePage> {
         return SafeArea(
           child: Column(
             children: [
-              // --- 极简状态条（右对齐，纯文字）---
+              // ── 极简状态条 ──
               _buildTopBar(state),
 
-              // --- 宠物显示区域 ---
+              // ── 宠物显示区域（全手势） ──
               Expanded(
                 flex: 5,
                 child: Center(
-                  child: PetWidget(
-                    state: state,
-                    size: PetSize.container,
+                  child: GestureEngine(
+                    onLongPressStart: _onLongPressStart,
+                    onLongPressEnd: _onLongPressEnd,
+                    onMultiTap: _onMultiTap,
+                    onDoubleTap: _onDoubleTap,
+                    onPanUpdate: _onPanUpdate,
+                    onDragThrow: _onDragThrow,
+                    onPinchUpdate: _onPinchUpdate,
+                    onPinchEnd: _onPinchEnd,
                     onTap: () => _showMoodSnackbar(context, state),
-                    onDoubleTap: () => _randomMood(context),
+                    child: _PetWidgetWrapper(
+                      key: _petKey,
+                      state: state,
+                    ),
                   ),
                 ),
               ),
 
-              // --- 系统提示（底部小字，无气泡）---
+              // ── 系统提示 ──
               _buildSystemHint(state),
 
               const SizedBox(height: AppSpacing.md),
 
-              // --- 快捷互动按钮（放宽间距）---
+              // ── 快捷互动按钮 ──
               _buildInteractionButtons(context, bloc),
 
               const SizedBox(height: AppSpacing.xs),
 
-              // --- 传感器微点指示 ---
+              // ── 传感器微点指示 ──
               _buildSensorDot(),
 
               const SizedBox(height: AppSpacing.sm),
@@ -92,19 +173,26 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ============ 顶部状态条（LVL + 三围数值）============
+  // ============================================================
+  // 顶部状态条
+  // ============================================================
 
   Widget _buildTopBar(PetState state) {
     final growth = (() {
-      try { return context.read<PetBloc>().growth; }
-      catch (_) { return GrowthState.initial(); }
+      try {
+        return context.read<PetBloc>().growth;
+      } catch (_) {
+        return GrowthState.initial();
+      }
     })();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: AppSpacing.sm),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xl,
+        vertical: AppSpacing.sm,
+      ),
       child: Row(
         children: [
-          // 左侧：LVL
           Text(
             'Lv.${growth.level}',
             style: TextStyle(
@@ -123,20 +211,19 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           const SizedBox(width: 8),
-          // 经验条（LVL右边，TAG左边）
           Expanded(
             flex: 2,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(1),
               child: LinearProgressIndicator(
-                value: growth.experience, minHeight: 2,
+                value: growth.experience,
+                minHeight: 2,
                 backgroundColor: const Color(0x0AFF6B9D),
                 valueColor: const AlwaysStoppedAnimation<Color>(kAccentColor),
               ),
             ),
           ),
           const SizedBox(width: 8),
-          // 右侧：三围数值 + 状态
           Expanded(
             flex: 5,
             child: Row(
@@ -148,13 +235,22 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(width: 4),
                 _buildStatItem('亲密', state.intimacy, isAccent: true),
                 const SizedBox(width: 3),
-                Container(width: 2, height: 2, decoration: BoxDecoration(color: kPrimaryColor.withValues(alpha: 0.2), shape: BoxShape.circle)),
+                Container(
+                  width: 2,
+                  height: 2,
+                  decoration: BoxDecoration(
+                    color: kPrimaryColor.withValues(alpha: 0.2),
+                    shape: BoxShape.circle,
+                  ),
+                ),
                 const SizedBox(width: 3),
                 Text(
                   state.isAwake ? '清醒' : '休眠',
                   style: TextStyle(
                     fontSize: 7.5,
-                    color: state.isAwake ? kPrimaryColor.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.18),
+                    color: state.isAwake
+                        ? kPrimaryColor.withValues(alpha: 0.5)
+                        : Colors.white.withValues(alpha: 0.18),
                     fontWeight: kFontThin,
                   ),
                 ),
@@ -178,7 +274,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ============ 系统提示（底部小字）============
+  // ============================================================
+  // 系统提示
+  // ============================================================
 
   Widget _buildSystemHint(PetState state) {
     if (state.thought == null || state.thought!.isEmpty) {
@@ -203,7 +301,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ============ 互动按钮（纯图标 + 纯文字，无背景框）============
+  // ============================================================
+  // 互动按钮
+  // ============================================================
 
   Widget _buildInteractionButtons(BuildContext context, PetBloc bloc) {
     return Padding(
@@ -214,13 +314,21 @@ class _HomePageState extends State<HomePage> {
           _buildTextIconButton(
             icon: AppIcons.pet,
             label: '抚触',
-            onTap: () => bloc.add(PetPetEvent()),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              bloc.add(PetPetEvent());
+              _petKey.currentState?.triggerHappyBounce();
+            },
           ),
           SizedBox(width: InteractionButtonSpec.spacing + 8),
           _buildTextIconButton(
             icon: AppIcons.feed,
             label: '喂食',
-            onTap: () => bloc.add(PetFeedEvent()),
+            onTap: () {
+              HapticFeedback.lightImpact();
+              bloc.add(PetFeedEvent());
+              _petKey.currentState?.triggerHappyBounce();
+            },
           ),
           SizedBox(width: InteractionButtonSpec.spacing + 8),
           _buildTalkButton(context),
@@ -262,7 +370,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             const SizedBox(height: 2),
-            // 微点指示器（激活态用）
             Container(
               width: InteractionButtonSpec.dotSize,
               height: InteractionButtonSpec.dotSize,
@@ -310,170 +417,74 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ============ 状态进度条（2px 极细）============
-
-  Widget _buildStatusIndicators(PetState state) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxxl),
-      child: Row(
-        children: [
-          _buildProgressBar(
-            label: '心情',
-            value: state.happiness,
-          ),
-          const SizedBox(width: AppSpacing.lg),
-          _buildProgressBar(
-            label: '精力',
-            value: state.energy,
-          ),
-          const SizedBox(width: AppSpacing.lg),
-          _buildProgressBar(
-            label: '亲密度',
-            value: state.intimacy,
-            highlightColor: kAccentColor,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressBar({
-    required String label,
-    required double value,
-    Color? highlightColor,
-  }) {
-    final activeColor = highlightColor ?? ProgressBarSpec.activeColor;
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: ProgressBarSpec.labelFontSize,
-              color: kPrimaryColor.withValues(
-                alpha: ProgressBarSpec.labelOpacity,
-              ),
-              fontWeight: kFontThin,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(ProgressBarSpec.borderRadius),
-            child: LinearProgressIndicator(
-              value: value,
-              minHeight: ProgressBarSpec.height,
-              backgroundColor: ProgressBarSpec.bgColor,
-              valueColor: AlwaysStoppedAnimation<Color>(activeColor),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============ 养成等级 ============
-
-  Widget _buildGrowthSection(BuildContext context) {
-    final growth = (() {
-      try {
-        return context.read<PetBloc>().growth;
-      } catch (_) {
-        return GrowthState.initial();
-      }
-    })();
-    final level = growth.level;
-    final exp = growth.experience;
-    final title = growth.levelTitle;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxxl),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Text(
-                'Lv.$level $title',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: kAccentColor.withValues(alpha: 0.7),
-                  fontWeight: kFontRegular,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${(exp * 100).toInt()}%',
-                style: TextStyle(
-                  fontSize: 9,
-                  color: kAccentColor.withValues(alpha: 0.4),
-                  fontWeight: kFontThin,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(ProgressBarSpec.borderRadius),
-            child: LinearProgressIndicator(
-              value: exp,
-              minHeight: ProgressBarSpec.height,
-              backgroundColor: ProgressBarSpec.bgColor,
-              valueColor: const AlwaysStoppedAnimation<Color>(kAccentColor),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============ 传感器微点 ============
+  // ============================================================
+  // 传感器指示
+  // ============================================================
 
   Widget _buildSensorDot() {
     return Container(
-      width: 3,
-      height: 3,
+      width: 4,
+      height: 4,
       decoration: BoxDecoration(
-        color: _sensorService.isListening
-            ? kPrimaryColor.withValues(alpha: 0.2)
-            : Colors.red.withValues(alpha: 0.15),
+        color: kPrimaryColor.withValues(alpha: 0.15),
         shape: BoxShape.circle,
       ),
     );
   }
 
-  // ============ 调试交互 ============
-
-  void _randomMood(BuildContext context) {
-    final bloc = context.read<PetBloc>();
-    final moods = PetMood.values;
-    final randomIndex = DateTime.now().microsecond % moods.length;
-    bloc.add(PetSetMoodEvent(moods[randomIndex]));
-  }
+  // ============================================================
+  // 辅助方法
+  // ============================================================
 
   void _showMoodSnackbar(BuildContext context, PetState state) {
+    final moodText = switch (state.mood) {
+      PetMood.happy => '😊 开心',
+      PetMood.calm => '😌 平静',
+      PetMood.sad => '😢 难过',
+      PetMood.surprised => '😲 惊讶',
+      PetMood.sleepy => '😴 困倦',
+      PetMood.missing => '💭 思念',
+    };
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          '${state.mood.name.toUpperCase()}',
-          style: const TextStyle(
-            fontSize: 12,
-            color: Color(0xFF4FC3F7),
-          ),
-        ),
-        duration: const Duration(milliseconds: 800),
-        backgroundColor: Colors.black.withOpacity(0.8),
-        elevation: 0,
+        content: Text('$moodText — ${state.thought ?? "..."}'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: Colors.black87,
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(20),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(
-            color: const Color(0xFF4FC3F7).withOpacity(0.15),
-            width: 0.5,
-          ),
-        ),
       ),
+    );
+  }
+}
+
+/// ============================================================
+/// PetWidget 包装器（暴露物理方法给 home_page）
+/// ============================================================
+
+class _PetWidgetWrapper extends StatefulWidget {
+  final PetState state;
+
+  const _PetWidgetWrapper({super.key, required this.state});
+
+  @override
+  State<_PetWidgetWrapper> createState() => _PetWidgetWrapperState();
+}
+
+class _PetWidgetWrapperState extends State<_PetWidgetWrapper> {
+  final GlobalKey<PetWidgetState> _innerKey = GlobalKey();
+
+  void triggerHappyBounce() => _innerKey.currentState?.triggerHappyBounce();
+  void triggerStartle() => _innerKey.currentState?.triggerStartle();
+  void applySquash(double amount) => _innerKey.currentState?.applySquash(amount);
+  void releaseSquash() => _innerKey.currentState?.releaseSquash();
+  void setPinchScale(double s) => _innerKey.currentState?.setPinchScale(s);
+  void resetPinchScale() => _innerKey.currentState?.resetPinchScale();
+
+  @override
+  Widget build(BuildContext context) {
+    return PetWidget(
+      key: _innerKey,
+      state: widget.state,
+      size: PetSize.container,
     );
   }
 }
