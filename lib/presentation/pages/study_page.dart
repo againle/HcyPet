@@ -21,8 +21,16 @@ class _StudyPageState extends State<StudyPage> {
   int _selectedTabIndex = 0;
   final TextEditingController _durationController = TextEditingController(text: '25');
   bool _visionEnabled = false;
-  String _lastEmotion = 'neutral';
-  double _lastAttentionScore = 0;
+
+  /// V3 视觉结果
+  VisionResult? _lastVisionResult;
+
+  /// 专注度变化趋势
+  double _focusTrend = 0.0;
+
+  /// 抑制重复通知的冷却计时
+  DateTime? _lastInterventionTime;
+  static const _interventionCooldown = Duration(seconds: 30);
 
   @override
   void dispose() {
@@ -57,6 +65,7 @@ class _StudyPageState extends State<StudyPage> {
                   } else if (state.status == TimerStatus.idle) {
                     petBloc.add(PetStopStudyingEvent());
                     _visionEnabled = false;
+                    _lastVisionResult = null;
                     context.read<VisionBloc>().add(VisionStopEvent());
                   }
                 },
@@ -65,7 +74,7 @@ class _StudyPageState extends State<StudyPage> {
                 listenWhen: (p, c) => p.lastResult != c.lastResult,
                 listener: (context, state) {
                   if (state.lastResult != null) {
-                    _onEmotionDetected(context, state.lastResult!);
+                    _onVisionUpdate(context, state);
                   }
                 },
               ),
@@ -451,62 +460,187 @@ class _StudyPageState extends State<StudyPage> {
   }
 
   String _getStudyStatusText() {
-    if (_visionEnabled && _lastEmotion == 'sad') return '别难过，我在这儿陪你';
-    if (_visionEnabled && _lastEmotion == 'angry') return '深呼吸，放松一下~';
-    return '认真陪伴中...';
+    final vr = _lastVisionResult;
+    if (!_visionEnabled || vr == null) return '认真陪伴中...';
+
+    // 情绪干预优先显示
+    if (vr.emotion.needsIntervention) {
+      return vr.emotion.interventionReason;
+    }
+
+    return vr.studyStatusText;
   }
 
   Color _getStudyStatusColor() {
-    if (_visionEnabled && (_lastEmotion == 'sad' || _lastEmotion == 'angry')) return Colors.pink.withOpacity(0.25);
-    return const Color(0xFF4FC3F7).withOpacity(0.15);
+    final vr = _lastVisionResult;
+    if (!_visionEnabled || vr == null) return const Color(0xFF4FC3F7).withOpacity(0.15);
+
+    if (vr.emotion.needsIntervention) return Colors.amber.withOpacity(0.3);
+    if (vr.focusScore > 0.7) return Colors.green.withOpacity(0.3);
+    if (vr.focusScore > 0.45) return const Color(0xFF4FC3F7).withOpacity(0.25);
+    if (vr.focusScore > 0.25) return Colors.orange.withOpacity(0.2);
+    return Colors.red.withOpacity(0.2);
+  }
+
+  /// 专注度趋势图标
+  IconData _getFocusTrendIcon() {
+    if (_focusTrend > 0.08) return Icons.trending_up;
+    if (_focusTrend < -0.08) return Icons.trending_down;
+    return Icons.trending_flat;
+  }
+
+  Color _getFocusTrendColor() {
+    if (_focusTrend > 0.08) return Colors.green.withOpacity(0.4);
+    if (_focusTrend < -0.08) return Colors.red.withOpacity(0.3);
+    return Colors.grey.withOpacity(0.2);
   }
 
   Widget _buildVisionStatus() {
     return BlocBuilder<VisionBloc, VisionState>(
       builder: (context, state) {
         final hasError = state.errorMessage != null;
-        final isRunning = state.isEnabled && !hasError;
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        final isRunning = state.isDetecting && !hasError;
+        final vr = _lastVisionResult;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 4, height: 4, decoration: BoxDecoration(
-              color: hasError
-                  ? Colors.red.withOpacity(0.3)
-                  : isRunning
-                      ? Colors.green.withOpacity(0.3)
-                      : Colors.grey.withOpacity(0.15),
-              shape: BoxShape.circle,
-            )),
-            const SizedBox(width: 5),
-            Text(
-              hasError
-                  ? '无法启动'
-                  : isRunning
-                      ? '视觉追踪中'
-                      : '已停止',
-              style: TextStyle(
-                fontSize: 8,
-                color: hasError
-                    ? Colors.red.withOpacity(0.15)
-                    : const Color(0xFF4FC3F7).withOpacity(0.1),
-              ),
+            // 状态指示灯 + 场景标签
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 4, height: 4,
+                  decoration: BoxDecoration(
+                    color: hasError
+                        ? Colors.red.withOpacity(0.3)
+                        : isRunning
+                            ? Colors.green.withOpacity(0.3)
+                            : Colors.grey.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  hasError
+                      ? '无法启动'
+                      : isRunning && vr != null
+                          ? '${vr.scene.label} · ${(vr.focusScore * 100).toInt()}%专注'
+                          : isRunning
+                              ? '视觉追踪中'
+                              : '已停止',
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: hasError
+                        ? Colors.red.withOpacity(0.2)
+                        : const Color(0xFF4FC3F7).withOpacity(0.18),
+                  ),
+                ),
+                if (isRunning && vr != null) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    _getFocusTrendIcon(),
+                    size: 10,
+                    color: _getFocusTrendColor(),
+                  ),
+                ],
+              ],
             ),
+
+            // V3 情绪谱迷你条（运行中显示）
+            if (isRunning && vr != null) ...[
+              const SizedBox(height: 3),
+              _buildEmotionMiniBars(vr.emotion),
+            ],
+
+            // 错误信息
+            if (hasError)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  state.errorMessage!,
+                  style: TextStyle(fontSize: 7, color: Colors.red.withOpacity(0.12)),
+                ),
+              ),
           ],
         );
       },
     );
   }
 
-  void _onEmotionDetected(BuildContext context, EmotionResult result) {
-    _lastEmotion = result.emotion;
-    _lastAttentionScore = result.attentionScore;
-    // 只在情绪明显负面时提醒（不因低头看书误判走神）
-    if (result.isNegative && result.confidence > 0.5) {
-      context.read<PetBloc>().add(PetVisionEvent(
-        emotion: result.emotion,
-        attentionScore: result.attentionScore,
-      ));
+  /// 迷你情绪谱条
+  Widget _buildEmotionMiniBars(EmotionSpectrum e) {
+    final items = [
+      ('静', e.calm, const Color(0xFF4FC3F7)),
+      ('专', e.focused, const Color(0xFF42A5F5)),
+      ('烦', e.frustrated, Colors.orange),
+      ('闷', e.bored, Colors.grey),
+      ('悦', e.happy, Colors.pink),
+      ('虑', e.anxious, Colors.purple),
+      ('疲', e.tired, Colors.red),
+    ];
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: items.map((item) {
+        final (label, value, color) = item;
+        final isActive = value > 0.25;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 3),
+          child: Column(
+            children: [
+              Container(
+                width: 12,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(isActive ? 0.6 : 0.1),
+                  borderRadius: BorderRadius.circular(1.5),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 7,
+                  color: color.withOpacity(isActive ? 0.4 : 0.1),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  /// V3 视觉更新处理器
+  void _onVisionUpdate(BuildContext context, VisionState state) {
+    final vr = state.lastResult!;
+    _lastVisionResult = vr;
+    _focusTrend = state.focusTrend;
+
+    // 冷却检查：30秒内不重复发送同一类型的干预
+    final now = DateTime.now();
+    final inCooldown = _lastInterventionTime != null &&
+        now.difference(_lastInterventionTime!) < _interventionCooldown;
+
+    // 发送给 PetBloc（带 VisionResult）
+    final petBloc = context.read<PetBloc>();
+    petBloc.add(PetVisionEvent(
+      emotion: vr.emotion.dominantEmotion,
+      attentionScore: vr.focusScore,
+      visionResult: vr,
+    ));
+
+    // 场景变化通知（不在冷却期时）
+    if (!inCooldown) {
+      if (vr.scene == StudyScene.phone) {
+        _lastInterventionTime = now;
+      } else if (vr.scene == StudyScene.distracted) {
+        _lastInterventionTime = now;
+      }
     }
-    context.read<StudyBloc>().add(StudyFocusUpdateEvent(true));
+
+    // 专注度更新
+    context.read<StudyBloc>().add(StudyFocusUpdateEvent(vr.isStudying));
   }
 }

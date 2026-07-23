@@ -1,6 +1,7 @@
 import 'dart:math';
 import '../models/pet_state.dart';
 import '../models/user_action.dart';
+import '../services/vision_service.dart';
 
 /// ============================================================
 /// AI 情感推理引擎 — 规则引擎 + 加权评分 + 上下文记忆
@@ -205,12 +206,149 @@ class EmotionEngine {
     );
   }
 
-  /// 视觉检测
+  /// 视觉检测 V3 — 利用多维情绪谱 + 场景识别
   PetReaction _handleVision(UserAction action, PetState state) {
-    final emotion = action.detectedEmotion ?? 'neutral';
-    final attention = action.attentionScore ?? 50;
+    final vr = action.visionResult;
 
-    if (attention < 40) {
+    // V3 数据（优先使用）
+    if (vr != null) {
+      final spectrum = vr.emotion;
+      final focusScore = vr.focusScore;
+      final scene = vr.scene;
+
+      // 1. 场景提示
+      if (scene == StudyScene.phone) {
+        return PetReaction(
+          targetMood: PetMood.calm,
+          systemHint: '放下手机，专心学习吧~',
+          intimacyDelta: _applyDiminishing(0.005),
+          happinessDelta: -0.005,
+          energyDelta: 0.0,
+          shouldAnimate: false,
+          suggestedActivity: PetActivity.watching,
+        );
+      }
+      if (scene == StudyScene.distracted) {
+        return PetReaction(
+          targetMood: PetMood.surprised,
+          systemHint: '走神了？我在这儿呢',
+          intimacyDelta: _applyDiminishing(0.003),
+          happinessDelta: 0.0,
+          energyDelta: 0.0,
+          shouldAnimate: true,
+          suggestedActivity: PetActivity.watching,
+        );
+      }
+
+      // 2. 情绪干预（按优先级）
+      // 疲惫 → 最优先提醒
+      if (spectrum.tired > 0.35) {
+        return PetReaction(
+          targetMood: PetMood.sleepy,
+          systemHint: '累了吗？休息五分钟吧',
+          intimacyDelta: _applyDiminishing(0.01),
+          happinessDelta: 0.0,
+          energyDelta: -0.005,
+          shouldAnimate: true,
+          suggestedActivity: PetActivity.watching,
+        );
+      }
+
+      // 烦躁（轻微也要反馈）
+      if (spectrum.frustrated > 0.25) {
+        final level = spectrum.frustrated > 0.5 ? '深呼吸，慢慢来~' : '别着急，我在呢';
+        return PetReaction(
+          targetMood: spectrum.frustrated > 0.5 ? PetMood.sad : PetMood.calm,
+          systemHint: level,
+          intimacyDelta: _applyDiminishing(0.015),
+          happinessDelta: -0.008,
+          energyDelta: 0.0,
+          shouldAnimate: spectrum.frustrated > 0.4,
+          suggestedActivity: PetActivity.watching,
+        );
+      }
+
+      // 无聊
+      if (spectrum.bored > 0.35) {
+        return PetReaction(
+          targetMood: PetMood.calm,
+          systemHint: '再坚持一下！快完成了',
+          intimacyDelta: _applyDiminishing(0.008),
+          happinessDelta: 0.005,
+          energyDelta: 0.005,
+          shouldAnimate: true,
+          suggestedActivity: PetActivity.watching,
+        );
+      }
+
+      // 焦虑
+      if (spectrum.anxious > 0.3) {
+        return PetReaction(
+          targetMood: PetMood.calm,
+          systemHint: '别担心，一切都会好的',
+          intimacyDelta: _applyDiminishing(0.012),
+          happinessDelta: 0.0,
+          energyDelta: 0.0,
+          shouldAnimate: false,
+          suggestedActivity: PetActivity.watching,
+        );
+      }
+
+      // 开心
+      if (spectrum.happy > 0.3) {
+        return PetReaction(
+          targetMood: PetMood.happy,
+          systemHint: '开心学习效率更高！',
+          intimacyDelta: _applyDiminishing(0.01),
+          happinessDelta: 0.015,
+          energyDelta: 0.005,
+          shouldAnimate: true,
+          suggestedActivity: PetActivity.watching,
+        );
+      }
+
+      // 3. 专注度反馈
+      if (focusScore > 0.7) {
+        // 深度专注 → 安静陪伴，不打扰
+        return PetReaction(
+          targetMood: PetMood.calm,
+          systemHint: '', // 深度专注时不打扰
+          intimacyDelta: _applyDiminishing(0.003),
+          happinessDelta: 0.0,
+          energyDelta: 0.0,
+          shouldAnimate: false,
+          suggestedActivity: PetActivity.watching,
+        );
+      }
+      if (focusScore < 0.25 && scene.isStudying) {
+        return PetReaction(
+          targetMood: PetMood.calm,
+          systemHint: '专注点哦~',
+          intimacyDelta: _applyDiminishing(0.003),
+          happinessDelta: 0.0,
+          energyDelta: 0.0,
+          shouldAnimate: false,
+          suggestedActivity: PetActivity.watching,
+        );
+      }
+
+      // 默认平静陪伴
+      return PetReaction(
+        targetMood: PetMood.calm,
+        systemHint: '', // 减少冗余提示
+        intimacyDelta: _applyDiminishing(0.002),
+        happinessDelta: 0.0,
+        energyDelta: 0.0,
+        shouldAnimate: false,
+        suggestedActivity: PetActivity.watching,
+      );
+    }
+
+    // ===== V2 兼容（无 VisionResult 时）=====
+    final emotion = action.detectedEmotion ?? 'neutral';
+    final attention = (action.attentionScore ?? 0.5);
+
+    if (attention < 0.4) {
       return PetReaction(
         targetMood: PetMood.calm,
         systemHint: '专注点哦~ 我在这儿陪你',
@@ -219,48 +357,12 @@ class EmotionEngine {
       );
     }
 
-    switch (emotion) {
-      case 'sad':
-        return PetReaction(
-          targetMood: PetMood.sad,
-          systemHint: '别难过，我在这儿陪你',
-          intimacyDelta: _applyDiminishing(0.02),
-          happinessDelta: -0.01,
-          energyDelta: 0.0,
-          shouldAnimate: true,
-          suggestedActivity: PetActivity.watching,
-        );
-      case 'angry':
-        return PetReaction(
-          targetMood: PetMood.calm,
-          systemHint: '深呼吸，放松一下~',
-          intimacyDelta: _applyDiminishing(0.01),
-          happinessDelta: -0.01,
-          energyDelta: 0.0,
-          shouldAnimate: false,
-          suggestedActivity: PetActivity.watching,
-        );
-      case 'happy':
-        return PetReaction(
-          targetMood: PetMood.happy,
-          systemHint: '看到你开心我也好开心！',
-          intimacyDelta: _applyDiminishing(0.01),
-          happinessDelta: 0.02,
-          energyDelta: 0.01,
-          shouldAnimate: true,
-          suggestedActivity: PetActivity.watching,
-        );
-      default:
-        return PetReaction(
-          targetMood: PetMood.calm,
-          systemHint: '认真陪伴中...',
-          intimacyDelta: _applyDiminishing(0.005),
-          happinessDelta: 0.0,
-          energyDelta: 0.0,
-          shouldAnimate: false,
-          suggestedActivity: PetActivity.watching,
-        );
-    }
+    return PetReaction(
+      targetMood: PetMood.calm,
+      systemHint: '',
+      intimacyDelta: _applyDiminishing(0.002),
+      suggestedActivity: PetActivity.watching,
+    );
   }
 
   /// 伴侣消息

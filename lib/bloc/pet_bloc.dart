@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/pet_state.dart';
@@ -8,7 +9,7 @@ import '../models/user_action.dart';
 import '../models/growth_state.dart';
 import '../services/emotion_engine.dart';
 
-/// 宠物 Bloc — V2 AI 情感引擎驱动 + 养成系统 + 作息模拟
+/// 宠物 Bloc — V3 昼夜节律精力 + 情绪联动 + AI 引擎
 class PetBloc extends Bloc<PetEvent, PetState> {
   Timer? _decayTimer;
   static const _decayInterval = Duration(seconds: 30);
@@ -26,9 +27,11 @@ class PetBloc extends Bloc<PetEvent, PetState> {
 
   /// 系统提示自动消失计时
   DateTime? _thoughtSetAt;
-  static const _dailyEventCount = 3; // 每天 3 次随机事件
+  static const _dailyEventCount = 3;
   int _todayEventsFired = 0;
-  final _random = DateTime.now().millisecond; // 伪随机种子
+
+  /// 起床时间（今天是否已计算过起床精力）
+  DateTime? _todayWakeDate;
 
   PetBloc() : super(PetState.initial()) {
     on<PetInitEvent>(_onInit);
@@ -96,7 +99,7 @@ class PetBloc extends Bloc<PetEvent, PetState> {
   }
 
   Future<void> _onPet(PetPetEvent event, Emitter<PetState> emit) async {
-    // 如果宠物在睡觉，需要先唤醒
+    // 如果宠物在睡觉，需要先唤醒（记录睡眠打断）
     if (!state.isAwake || state.activity == PetActivity.sleeping) {
       final groggyState = state.copyWith(
         activity: PetActivity.groggy,
@@ -139,6 +142,7 @@ class PetBloc extends Bloc<PetEvent, PetState> {
       );
       _scheduleThoughtClear();
       emit(groggyState);
+      _saveState(groggyState);
       Future.delayed(const Duration(seconds: 2), () {
         if (!isClosed) add(PetSetActivityEvent(PetActivity.idle));
       });
@@ -204,102 +208,193 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     });
   }
 
+  // ============================================================
+  // V3 昼夜节律系统
+  // ============================================================
+
+  /// 计算任意时刻的昼夜节律目标精力值 (0~1)
+  ///
+  /// 曲线特征:
+  ///   08:30 → ~90%  晨峰
+  ///   12:30 → ~50%  午饭后低谷
+  ///   16:00 → ~80%  午后回升
+  ///   22:00 → ~15%  晚间入睡前
+  ///   03:00 → ~8%   深夜最低
+  double _computeCircadianTargetEnergy(DateTime now) {
+    final hour = now.hour + now.minute / 60.0;
+
+    // 用双峰余弦波建模昼夜节律:
+    //   baseCos: 周期24h, 峰值8:30(90%), 谷值20:30(10%)
+    //   afternoonHump: 下午3:30额外回升
+    //   lunchDip: 午饭后深谷(12:30)
+
+    final angle = (hour - 8.5) / 24.0 * 2 * math.pi;
+    final baseCos = 0.5 + 0.4 * math.cos(angle);
+
+    // 午后回升高斯（中心15:30，宽度±3h）
+    final afternoonHump = 0.28 * math.exp(-((hour - 15.5) * (hour - 15.5)) / 18.0);
+
+    // 午饭低谷高斯（中心12:30，宽度±1.5h）
+    final lunchDip = 0.22 * math.exp(-((hour - 12.5) * (hour - 12.5)) / 2.8);
+
+    var energy = baseCos + afternoonHump - lunchDip;
+    return energy.clamp(0.06, 0.95);
+  }
+
+  /// 计算起床时的初始精力（基于睡眠质量）
+  double _computeWakeUpEnergy() {
+    final sleepAt = state.lastSleepAt;
+    if (sleepAt == null) {
+      // 无睡眠记录 → 默认90%
+      return 0.90;
+    }
+
+    final now = DateTime.now();
+    final sleepHours = now.difference(sleepAt).inMinutes / 60.0;
+
+    // 睡眠质量 = 时长因子 × 打断惩罚
+    // 理想8h=1.0, 4h=0.5, <2h=0.25
+    final durationQuality = (sleepHours / 8.0).clamp(0.25, 1.0);
+
+    // 每次被打断扣15%，最多扣60%
+    final interruptionPenalty = (state.wakeAttempts * 0.15).clamp(0.0, 0.6);
+    final quality = (durationQuality * (1.0 - interruptionPenalty)).clamp(0.2, 1.0);
+
+    // 基础精力 = 质量 × 90%
+    return (0.90 * quality).clamp(0.25, 0.95);
+  }
+
+  /// 计算起床时的初始情绪
+  double _computeWakeUpMood(double wakeUpEnergy) {
+    // 基础情绪60%，精力<70%时降到40%
+    if (wakeUpEnergy < 0.70) return 0.40;
+    return 0.60;
+  }
+
+  /// 检查是否为新的一天（需要重新计算起床精力）
+  bool _isNewDay(DateTime now) {
+    if (_todayWakeDate == null) return true;
+    return _todayWakeDate!.day != now.day ||
+           _todayWakeDate!.month != now.month ||
+           _todayWakeDate!.year != now.year;
+  }
+
+  // ============================================================
+  // 每 tick 处理（30秒一次）
+  // ============================================================
+
   void _onTick(PetTickEvent event, Emitter<PetState> emit) {
     final now = DateTime.now();
     final hour = now.hour;
+    final isNight = (hour >= 23 || hour < 7); // 23:00-07:00 夜间
 
-    // 睡眠中：精力快速恢复
-    if (state.activity == PetActivity.sleeping) {
-      final newEnergy = (state.energy + 0.03).clamp(0.0, 1.0);
-      // 早晨自动醒来 (7-9点)
-      if (hour >= 7 && hour <= 9 && newEnergy > 0.6) {
+    // ================================================================
+    // 状态：睡眠中
+    // ================================================================
+    if (state.activity == PetActivity.sleeping || !state.isAwake) {
+      // 记录入睡时间
+      final effectiveSleepAt = state.lastSleepAt ?? now;
+
+      // 睡眠期间精力恢复：每30s恢复2%（快速恢复便于演示，也可调慢）
+      final sleepRecovery = 0.02;
+      final newEnergy = (state.energy + sleepRecovery).clamp(0.0, 0.95);
+
+      // 早晨自动醒来 (7:00-9:00)
+      if (hour >= 7 && hour < 9 && newEnergy >= 0.30) {
+        final wakeEnergy = _computeWakeUpEnergy();
+        final wakeMood = _computeWakeUpMood(wakeEnergy);
+        _todayWakeDate = now;
+
+        final moodLabel = wakeEnergy < 0.70 ? '还没睡够...' : '早上好！新的一天~';
         emit(state.copyWith(
-          activity: PetActivity.groggy, energy: newEnergy,
-          mood: PetMood.sleepy, isAwake: true,
-          thought: '早上好... 刚睡醒~',
+          activity: PetActivity.groggy,
+          mood: PetMood.sleepy,
+          isAwake: true,
+          energy: wakeEnergy,
+          happiness: wakeMood,
+          wakeAttempts: 0, // 重置
+          lastInteraction: now,
+          thought: moodLabel,
         ));
         _scheduleThoughtClear();
+        _saveState(state); // will save after this emit in next tick
+        // 3 秒后完全清醒
         Future.delayed(const Duration(seconds: 3), () {
           if (!isClosed) add(PetSetActivityEvent(PetActivity.idle));
         });
         return;
       }
-      emit(state.copyWith(energy: newEnergy));
-      return;
-    }
 
-    // 午夜/凌晨被唤醒 → 快速回到睡眠
-    if ((hour >= 23 || hour < 5) && state.activity == PetActivity.groggy && state.energy < 0.3) {
       emit(state.copyWith(
-        activity: PetActivity.sleeping, isAwake: false, mood: PetMood.sleepy, thought: 'zzz...',
+        energy: newEnergy,
+        lastSleepAt: effectiveSleepAt,
       ));
       return;
     }
 
-    // 晚上自动入睡 (23点后，精力低)
-    if ((hour >= 23 || hour < 6) && state.energy < 0.2 && state.activity != PetActivity.studying) {
-      emit(state.copyWith(
-        activity: PetActivity.sleeping, isAwake: false,
-        mood: PetMood.sleepy, thought: 'zzz... 晚安~',
-      ));
-      _scheduleThoughtClear();
+    // ================================================================
+    // 状态：刚醒（groggy → idle 过渡）
+    // ================================================================
+    if (state.activity == PetActivity.groggy) {
+      // 几秒后自动转idle（由外部 Future.delayed 触发），这里不做额外衰减
+      // 检查是否需要重新入睡（午夜被唤醒后快速回睡）
+      if (isNight && state.energy < 0.20) {
+        _goToSleep(emit, now);
+        return;
+      }
       return;
     }
 
-    final decayFactor = 1.0;
+    // ================================================================
+    // 状态：清醒中 → 精力向昼夜节律目标平滑逼近
+    // ================================================================
+
+    // 1. 检查是否需要自动入睡（23点后 + 精力低 + 不在学习）
+    if (isNight && state.energy < 0.18 && state.activity != PetActivity.studying) {
+      _goToSleep(emit, now);
+      return;
+    }
+
+    // 2. 昼夜节律目标精力
+    final circadianTarget = _computeCircadianTargetEnergy(now);
+
+    // 3. 精力平滑趋向目标（每次 tick 向目标移动 3% 差距）
+    final energyGap = circadianTarget - state.energy;
+    final energyDelta = energyGap * 0.03 + (energyGap > 0 ? 0.002 : -0.002);
+    final newEnergy = (state.energy + energyDelta).clamp(0.0, 1.0);
+
+    // 4. 心情衰减（基础 -0.003/tick，长时间未互动加速）
     final idleHours = now.difference(state.lastInteraction).inHours;
+    double happinessDelta = -0.003;
+    if (idleHours > 8) happinessDelta = -0.008;
+    // 如果精力很低，心情也跟着下降
+    if (newEnergy < 0.20) happinessDelta -= 0.005;
 
-    // 饱腹度衰减
+    // 5. 饱腹度衰减
     final feedHours = state.lastFedAt != null ? now.difference(state.lastFedAt!).inHours : 10;
     final newFullness = (state.fullness - 0.03 * (feedHours / 1.0).clamp(0.0, 2.0)).clamp(0.0, 1.0);
-    // 饿了会撒娇（低落）
     final isHungry = newFullness < 0.25 && state.fullness >= 0.25;
 
-    // ======== 1. 精力：模拟人体昼夜节律 ========
-    double energyDelta;
-    if (hour >= 6 && hour < 10) {
-      energyDelta = 0.012; // 早晨自然醒来，精力上升
-    } else if (hour >= 10 && hour < 12) {
-      energyDelta = -0.002;
-    } else if (hour >= 12 && hour < 15) {
-      energyDelta = -0.010; // 午饭后犯困加速
-    } else if (hour >= 15 && hour < 17) {
-      energyDelta = -0.005;
-    } else if (hour >= 17 && hour < 21) {
-      energyDelta = -0.003; // 傍晚恢复
-    } else if (hour >= 21 || hour < 2) {
-      energyDelta = -0.012; // 晚间加速下降
-    } else {
-      energyDelta = -0.018; // 深夜（2-6点）快速下降
-    }
+    // 6. 亲密度衰减
+    double intimacyDelta = -0.0015;
+    if (idleHours > 12) intimacyDelta = -0.004;
+    if (idleHours > 24) intimacyDelta = -0.010;
+    if (idleHours > 72) intimacyDelta = -0.025;
+    if (state.intimacy > 0.8) intimacyDelta *= 1.5;
 
-    // ======== 2. 心情：缓慢衰减 ========
-    double happinessDecay = -0.003;
-    // 长时间未互动加速衰减
-    if (idleHours > 8) happinessDecay = -0.008;
-
-    // ======== 3. 亲密度：经营式衰减 ========
-    double intimacyDecay = -0.0015; // 每天约 -4.3%
-    if (idleHours > 12) intimacyDecay = -0.004;  // 半天不互动
-    if (idleHours > 24) intimacyDecay = -0.010;  // 一天不互动加速
-    if (idleHours > 72) intimacyDecay = -0.025;  // 三天不互动陡降
-    // 高亲密度时衰减更明显（维持需要更多努力）
-    if (state.intimacy > 0.8) intimacyDecay *= 1.5;
-
-    // ======== 4. AI 引擎空闲处理 ========
+    // 7. AI 引擎空闲处理
     final action = UserAction.idle(Duration(hours: idleHours));
     final reaction = _engine.process(action, currentState: state);
 
-    // ======== 5. 合成新值 ========
-    final newHappiness = (state.happiness + happinessDecay * decayFactor + reaction.happinessDelta).clamp(0.0, 1.0);
-    final newEnergy = (state.energy + energyDelta * decayFactor + reaction.energyDelta).clamp(0.0, 1.0);
-    final newIntimacy = (state.intimacy + intimacyDecay * decayFactor + reaction.intimacyDelta).clamp(0.0, 1.0);
+    // 8. 合成
+    final newHappiness = (state.happiness + happinessDelta + reaction.happinessDelta).clamp(0.0, 1.0);
+    final newIntimacy = (state.intimacy + intimacyDelta + reaction.intimacyDelta).clamp(0.0, 1.0);
 
-    // ======== 6. 情绪判断 ========
+    // 9. 情绪推断
     PetMood newMood = reaction.targetMood != state.mood ? reaction.targetMood : state.mood;
     if (isHungry && newMood != PetMood.missing) {
-      newMood = PetMood.sad; // 饿了会撒娇
-    } else if (newEnergy < 0.12 && newMood != PetMood.missing) {
+      newMood = PetMood.sad;
+    } else if (newEnergy < 0.15) {
       newMood = PetMood.sleepy;
     } else if (newHappiness < 0.20) {
       newMood = PetMood.sad;
@@ -307,7 +402,7 @@ class PetBloc extends Bloc<PetEvent, PetState> {
       newMood = PetMood.calm;
     }
 
-    // ======== 7. 每日随机事件 ========
+    // 10. 每日随机事件
     String? eventThought = _checkDailyEvent(now, newMood);
     final hungryThought = isHungry ? '肚子好饿... 喂我吃点东西吧~' : null;
 
@@ -328,6 +423,19 @@ class PetBloc extends Bloc<PetEvent, PetState> {
     if (newState.mood != state.mood || newState.intimacy != state.intimacy) {
       _saveState(newState);
     }
+  }
+
+  /// 进入睡眠
+  void _goToSleep(Emitter<PetState> emit, DateTime now) {
+    emit(state.copyWith(
+      activity: PetActivity.sleeping,
+      isAwake: false,
+      mood: PetMood.sleepy,
+      lastSleepAt: now,
+      thought: 'zzz... 晚安~',
+    ));
+    _scheduleThoughtClear();
+    _saveState(state);
   }
 
   /// 每日随机心情事件（每天 2-4 次，随机时间触发）
@@ -448,10 +556,13 @@ class PetBloc extends Bloc<PetEvent, PetState> {
   }
 
   void _onVision(PetVisionEvent event, Emitter<PetState> emit) {
-    final action = UserAction.vision(
-      emotion: event.emotion,
-      attentionScore: event.attentionScore,
-    );
+    final vr = event.visionResult;
+    final action = vr != null
+        ? UserAction.visionResult(vr as dynamic)
+        : UserAction.vision(
+            emotion: event.emotion,
+            attentionScore: event.attentionScore,
+          );
     final reaction = _engine.process(action, currentState: state);
     final newState = _applyReaction(reaction);
     emit(newState);

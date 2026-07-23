@@ -1,11 +1,13 @@
 import '../../models/pet_state.dart';
+import '../services/vision_service.dart';
 
 /// 用户行为输入（AI 情感引擎的输入）
 class UserAction {
   final UserActionType type;
   final String? text;            // 用户输入的文字（若有）
-  final String? detectedEmotion; // 视觉检测的情绪（若有）
-  final double? attentionScore;  // 视觉检测的注意力分数
+  final String? detectedEmotion; // V2 兼容：视觉检测的情绪
+  final double? attentionScore;  // V2 兼容：注意力分数
+  final VisionResult? visionResult; // V3：完整视觉结果
   final DateTime timestamp;
 
   const UserAction({
@@ -13,6 +15,7 @@ class UserAction {
     this.text,
     this.detectedEmotion,
     this.attentionScore,
+    this.visionResult,
     required this.timestamp,
   });
 
@@ -50,6 +53,16 @@ class UserAction {
         timestamp: DateTime.now(),
       );
 
+  /// V3 视觉检测（携带完整 VisionResult）
+  factory UserAction.visionResult(VisionResult result) => UserAction(
+        type: UserActionType.vision,
+        detectedEmotion: result.emotion.dominantEmotion,
+        attentionScore: result.focusScore,
+        visionResult: result,
+        timestamp: DateTime.now(),
+      );
+
+  /// V2 兼容：视觉检测（仅情绪+注意力）
   factory UserAction.vision({required String emotion, required double attentionScore}) => UserAction(
         type: UserActionType.vision,
         detectedEmotion: emotion,

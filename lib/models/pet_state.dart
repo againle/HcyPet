@@ -35,6 +35,7 @@ class PetState extends Equatable {
   final String? thought;
   final double fullness;      // 饱腹度 0.0-1.0
   final DateTime? lastFedAt;  // 上次喂食时间
+  final DateTime? lastSleepAt; // 上次入睡时间（用于计算睡眠质量）
   final int wakeAttempts;     // 早晨唤醒尝试次数     // 宠物内心独白（可选）
 
   const PetState({
@@ -47,6 +48,7 @@ class PetState extends Equatable {
     this.isAwake = true,
     this.fullness = 0.5,
     this.lastFedAt,
+    this.lastSleepAt,
     this.wakeAttempts = 0,
     required this.lastInteraction,
     this.thought,
@@ -78,6 +80,7 @@ class PetState extends Equatable {
       isAwake: json['isAwake'] ?? true,
       fullness: (json['fullness'] as num?)?.toDouble() ?? 0.5,
       lastFedAt: json['lastFedAt'] != null ? DateTime.parse(json['lastFedAt']) : null,
+      lastSleepAt: json['lastSleepAt'] != null ? DateTime.parse(json['lastSleepAt']) : null,
       wakeAttempts: (json['wakeAttempts'] as num?)?.toInt() ?? 0,
       lastInteraction: DateTime.parse(
         json['lastInteraction'] ?? DateTime.now().toIso8601String(),
@@ -98,6 +101,7 @@ class PetState extends Equatable {
       'isAwake': isAwake,
       'fullness': fullness,
       'lastFedAt': lastFedAt?.toIso8601String(),
+      'lastSleepAt': lastSleepAt?.toIso8601String(),
       'wakeAttempts': wakeAttempts,
       'lastInteraction': lastInteraction.toIso8601String(),
       'thought': thought,
@@ -117,6 +121,7 @@ class PetState extends Equatable {
     String? thought,
     double? fullness,
     DateTime? lastFedAt,
+    DateTime? lastSleepAt,
     int? wakeAttempts,
   }) {
     return PetState(
@@ -131,6 +136,7 @@ class PetState extends Equatable {
       thought: thought ?? this.thought,
       fullness: fullness ?? this.fullness,
       lastFedAt: lastFedAt ?? this.lastFedAt,
+      lastSleepAt: lastSleepAt ?? this.lastSleepAt,
       wakeAttempts: wakeAttempts ?? this.wakeAttempts,
     );
   }
@@ -146,5 +152,9 @@ class PetState extends Equatable {
         isAwake,
         lastInteraction,
         thought,
+        fullness,
+        lastFedAt,
+        lastSleepAt,
+        wakeAttempts,
       ];
 }

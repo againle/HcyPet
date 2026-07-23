@@ -1,48 +1,177 @@
+import 'dart:convert';
 import 'package:flutter/services.dart';
 
-/// 情绪检测结果
-class EmotionResult {
-  final String emotion;
-  final double confidence;
-  final bool isAttention;
-  final double attentionScore;
+// ============================================================
+// V3 视觉检测数据模型
+// ============================================================
 
-  const EmotionResult({
-    required this.emotion,
-    required this.confidence,
-    required this.isAttention,
-    required this.attentionScore,
+/// 学习场景分类
+enum StudyScene {
+  reading,     // 看书/写字
+  computer,    // 电脑
+  phone,       // 手机
+  distracted,  // 分心
+  noFace;      // 无人脸
+
+  /// 是否为有效学习场景
+  bool get isStudying {
+    switch (this) {
+      case StudyScene.reading:
+      case StudyScene.computer:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /// 中文标签
+  String get label {
+    switch (this) {
+      case StudyScene.reading:    return '看书/写字';
+      case StudyScene.computer:   return '电脑';
+      case StudyScene.phone:      return '手机';
+      case StudyScene.distracted: return '分心';
+      case StudyScene.noFace:     return '未检测到';
+    }
+  }
+}
+
+/// 连续情绪谱（7维，每维 0~1）
+class EmotionSpectrum {
+  final double calm;        // 平静
+  final double focused;     // 专注
+  final double frustrated;  // 烦躁
+  final double bored;       // 无聊
+  final double happy;       // 开心
+  final double anxious;     // 焦虑
+  final double tired;       // 疲惫
+
+  const EmotionSpectrum({
+    this.calm = 0.5,
+    this.focused = 0.5,
+    this.frustrated = 0.0,
+    this.bored = 0.0,
+    this.happy = 0.0,
+    this.anxious = 0.0,
+    this.tired = 0.0,
   });
 
-  factory EmotionResult.empty() => const EmotionResult(
-        emotion: 'neutral',
-        confidence: 0.0,
-        isAttention: false,
-        attentionScore: 0.0,
-      );
+  factory EmotionSpectrum.fromJson(String json) {
+    final map = jsonDecode(json) as Map<String, dynamic>;
+    return EmotionSpectrum(
+      calm: (map['calm'] as num).toDouble(),
+      focused: (map['focused'] as num).toDouble(),
+      frustrated: (map['frustrated'] as num).toDouble(),
+      bored: (map['bored'] as num).toDouble(),
+      happy: (map['happy'] as num).toDouble(),
+      anxious: (map['anxious'] as num).toDouble(),
+      tired: (map['tired'] as num).toDouble(),
+    );
+  }
 
-  factory EmotionResult.fromMap(Map<dynamic, dynamic> map) => EmotionResult(
-        emotion: (map['emotion'] as String?) ?? 'neutral',
-        confidence: (map['confidence'] as num?)?.toDouble() ?? 0.0,
-        isAttention: (map['isAttention'] as bool?) ?? false,
-        attentionScore: (map['attentionScore'] as num?)?.toDouble() ?? 0.0,
-      );
+  /// 主导情绪（最高分维度）
+  String get dominantEmotion {
+    final entries = {
+      'calm': calm,
+      'focused': focused,
+      'frustrated': frustrated,
+      'bored': bored,
+      'happy': happy,
+      'anxious': anxious,
+      'tired': tired,
+    };
+    final sorted = entries.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.first.key;
+  }
 
-  bool get isPositive =>
-      emotion == 'happy' || emotion == 'surprised' || emotion == 'neutral';
-  bool get isNegative =>
-      emotion == 'sad' || emotion == 'angry' || emotion == 'fearful' || emotion == 'disgusted';
+  /// 主导情绪强度
+  double get dominantIntensity {
+    return [calm, focused, frustrated, bored, happy, anxious, tired]
+        .reduce((a, b) => a > b ? a : b);
+  }
 
-  String get comfortMessage => switch (emotion) {
-        'sad'       => '别难过啦~ 我在呢',
-        'angry'     => '放松一下~ 深呼吸',
-        'fearful'   => '不怕不怕~ 我保护你',
-        'disgusted' => '是不是不开心？说给我听听',
-        'happy'     => '看到你开心我也好开心！',
-        'surprised' => '哇！是不是有好事发生？',
-        _           => '静静陪着你~',
-      };
+  /// 是否需要宠物干预（烦躁/无聊/疲惫/焦虑 任一 > 0.35）
+  bool get needsIntervention =>
+      frustrated > 0.35 || bored > 0.35 || tired > 0.35 || anxious > 0.35;
+
+  /// 干预原因
+  String get interventionReason {
+    if (frustrated > 0.35) return '有点烦躁呢';
+    if (tired > 0.35) return '看起来累了';
+    if (bored > 0.35) return '好像无聊了';
+    if (anxious > 0.35) return '在担心什么吗';
+    return '';
+  }
+
+  static const empty = EmotionSpectrum();
 }
+
+/// V3 视觉检测结果（替代旧 EmotionResult）
+class VisionResult {
+  final StudyScene scene;
+  final double focusScore;        // 0~1 专注度
+  final EmotionSpectrum emotion;  // 连续情绪谱
+  final bool isStudying;          // 是否处于学习状态
+  final DateTime timestamp;
+
+  const VisionResult({
+    required this.scene,
+    required this.focusScore,
+    required this.emotion,
+    required this.isStudying,
+    required this.timestamp,
+  });
+
+  factory VisionResult.fromMap(Map<dynamic, dynamic> map) {
+    final sceneStr = (map['scene'] as String?) ?? 'noFace';
+    final scene = StudyScene.values.firstWhere(
+      (s) => s.name == sceneStr,
+      orElse: () => StudyScene.noFace,
+    );
+    final emotionJson = (map['emotionJson'] as String?) ?? '{}';
+    return VisionResult(
+      scene: scene,
+      focusScore: (map['focusScore'] as num?)?.toDouble() ?? 0.0,
+      emotion: EmotionSpectrum.fromJson(emotionJson),
+      isStudying: (map['isStudying'] as bool?) ?? false,
+      timestamp: DateTime.now(),
+    );
+  }
+
+  factory VisionResult.empty() => VisionResult(
+        scene: StudyScene.noFace,
+        focusScore: 0.0,
+        emotion: EmotionSpectrum.empty,
+        isStudying: false,
+        timestamp: DateTime.now(),
+      );
+
+  /// 兼容旧版 comfort message（基于主导情绪）
+  String get comfortMessage => switch (emotion.dominantEmotion) {
+        'frustrated' => '深呼吸，慢慢来~',
+        'tired'      => '累了就歇会儿吧',
+        'bored'      => '再坚持一下！',
+        'anxious'    => '别担心，我在呢',
+        'happy'      => '看到你开心我也开心！',
+        'focused'    => '好专注！继续保持~',
+        'calm'       => '静静陪着你~',
+        _            => '加油！',
+      };
+
+  /// 根据专注度 + 情绪给出学习状态文本
+  String get studyStatusText {
+    if (!isStudying) return '未在学习';
+    if (focusScore > 0.7) return '深度专注';
+    if (focusScore > 0.45) return '学习中';
+    if (focusScore > 0.25) return '有点走神';
+    return '分心了';
+  }
+}
+
+// ============================================================
+// VisionService — V3 MethodChannel 桥接
+// ============================================================
 
 /// 视觉追踪服务 — iOS Apple Vision MethodChannel 桥接
 class VisionService {
@@ -55,7 +184,7 @@ class VisionService {
 
   bool _isRunning = false;
 
-  void Function(EmotionResult result)? onEmotionDetected;
+  void Function(VisionResult result)? onVisionResult;
   void Function(String error)? onError;
 
   /// 初始化 MethodChannel
@@ -85,8 +214,7 @@ class VisionService {
       await _channel!.invokeMethod('stopVision');
     } catch (_) {}
     _isRunning = false;
-    // 清理回调防止泄漏
-    onEmotionDetected = null;
+    onVisionResult = null;
     onError = null;
   }
 
@@ -106,7 +234,7 @@ class VisionService {
       case 'onVisionResult':
         final args = call.arguments as Map<dynamic, dynamic>?;
         if (args != null) {
-          onEmotionDetected?.call(EmotionResult.fromMap(args));
+          onVisionResult?.call(VisionResult.fromMap(args));
         }
         break;
       case 'onVisionError':
@@ -115,7 +243,7 @@ class VisionService {
     }
   }
 
-  EmotionResult getLastResult() => EmotionResult.empty();
+  VisionResult getLastResult() => VisionResult.empty();
 
   void dispose() {
     stop();

@@ -70,7 +70,12 @@ class PetPartnerMessageEvent extends PetEvent {
 class PetVisionEvent extends PetEvent {
   final String emotion;
   final double attentionScore;
-  const PetVisionEvent({required this.emotion, required this.attentionScore});
+  final dynamic visionResult; // V3: VisionResult (避免循环依赖)
+  const PetVisionEvent({
+    required this.emotion,
+    required this.attentionScore,
+    this.visionResult,
+  });
 
   @override
   List<Object?> get props => [emotion, attentionScore];
